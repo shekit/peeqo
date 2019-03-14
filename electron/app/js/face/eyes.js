@@ -17,6 +17,8 @@ class Eyes {
 		this.blinkTimer = null
 		this.eyes = snap.group(this.leftEye, this.rightEye)
 		this.blinkIntervals = [4000, 6000, 10000, 1000, 500, 8000]
+		this.transitionSize = 1000
+		this.transitionSpeed = 100
 
 		this.eyes.attr({
 			fill: color
@@ -24,10 +26,14 @@ class Eyes {
 
 		this.startBlinking = this.startBlinking.bind(this)
 		this.stopBlinking =  this.stopBlinking.bind(this)
+		this.transitionToMedia = this.transitionToMedia.bind(this)
+		this.transitionFromMedia = this.transitionFromMedia.bind(this)
 		this.blink = this.blink.bind(this)
 
 		event.on('start-blinking', this.startBlinking)
 		event.on('stop-blinking', this.stopBlinking)
+		event.on('transition-eyes-away', this.transitionToMedia)
+		event.on('transition-eyes-back', this.transitionFromMedia)
 	}
 
 	getRandomBlinkInterval(){
@@ -38,6 +44,25 @@ class Eyes {
 		this.isBlinking = true
 		let duration = this.getRandomBlinkInterval()
 		this.blinkTimer = setTimeout(this.blink, duration) 
+	}
+
+	transitionFromMedia(){
+		this.leftEye.animate({ry:this.eyeSize, rx:this.eyeSize}, this.transitionSpeed, mina.easein())
+		this.rightEye.animate({ry:this.eyeSize, rx:this.eyeSize}, this.transitionSpeed, mina.easein(), ()=>{
+			console.log("transitioned back")
+			this.startBlinking()
+		})
+	}
+
+	transitionToMedia(){
+		if(this.isBlinking){
+			this.stopBlinking()
+		}
+
+		this.leftEye.animate({ry:this.transitionSize, rx:this.transitionSize}, this.transitionSpeed, mina.elastic())
+		this.rightEye.animate({ry:this.transitionSize, rx:this.transitionSize}, this.transitionSpeed, mina.elastic(), ()=>{
+			console.log("transitioned away")
+		})
 	}
 
 	blink() {

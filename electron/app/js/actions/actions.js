@@ -6,6 +6,8 @@ function setAnswer(msg=null){
 	console.log("ANSWER")
 	console.log(msg)
 
+
+
 	if(msg.hasOwnProperty('cb')){
 		msg.cb()
 	}
