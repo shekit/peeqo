@@ -1,0 +1,8 @@
+node_modules
+.DS_Store
+package-lock.json
+.env
+npm-debug.log
+build
+app/config/config.js
+app/config/dialogflow.json

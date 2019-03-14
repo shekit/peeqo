@@ -1,0 +1,32 @@
+/* reset */
+html, body, div {
+	padding: 0;
+	margin: 0;
+	overflow: hidden;
+}
+
+/* wrapper class for all major divs */
+.wrapper {
+	display: none;
+	position: absolute;
+	top:0;
+	left: 0;
+	height: 480px; /* height defined in main.js*/
+	width: 800px;	/* width defined in main.js*/
+	overflow: none;
+}
+
+/* svg animated eyes */
+#eyeWrapper #eyes {
+	width: 100%;
+	height: 100%;
+	background: white;
+}
+
+/* peeqo glasses */
+#eyeWrapper #glasses {
+	position: absolute;
+	top:0;
+	left: 0;
+	z-index: 10;
+}
