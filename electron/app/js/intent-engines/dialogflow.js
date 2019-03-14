@@ -3,6 +3,7 @@ const through2 = require('through2')
 const path = require('path')
 const uuid = require('uuid')
 const config = require(path.join(process.cwd(),'app','config','config.js'))
+const event = require('js/events/events')
 
 function setup(){
 	// DIALOGFLOW
@@ -52,6 +53,10 @@ class DialogflowSpeech {
 		this.wakewordDetector = wakewordDetector
 
 		this.stream.write(this.request)
+
+		this.startStream = this.startStream.bind(this)
+
+		event.once('start-stt', this.startStream)
 	}
 
 	startSttStream(){
@@ -137,6 +142,8 @@ class DialogflowSpeech {
 
 			self.mic = null
 			self.wakewordDetector = null
+
+			event.removeListener('start-speech-to-text', self.startStream)
 
 		})
 

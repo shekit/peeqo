@@ -88,7 +88,9 @@ function startListening(){
 	event.on('speech-to-text', () => {
 		//pipe mic to speech to text engine
 		let stt = new dialogflow.DialogflowSpeech(mic, sessionClient, dialogflowRequest, wakewordDetector)
-		stt.startStream()
+		
+		event.emit('start-stt')
+
 	})
 
 	mic.pipe(wakewordDetector)
