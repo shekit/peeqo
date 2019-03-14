@@ -1,15 +1,15 @@
 const event = require('js/events/events')
 const responses = require('js/responses/responses')
 
-function setAnswer(msg=null){
+function setAnswer(ans=null){
 
 	console.log("ANSWER")
-	console.log(msg)
+	console.log(ans)
 
 
 
-	if(msg.hasOwnProperty('cb')){
-		msg.cb()
+	if(ans.hasOwnProperty('cb')){
+		ans.cb()
 	}
 	
 
