@@ -19,8 +19,13 @@ function getWeather(city){
 				console.error(`Cant find city ${query}`)
 				return
 			}
-			console.log(`The temperature in ${json.name} is ${json.main.temp} degrees with ${json.weather[0].description}`)
+			
+			displayWeather(json)
 		})
+}
+
+function displayWeather(data){
+	console.log(`The temperature in ${data.name} is ${data.main.temp} degrees with ${data.weather[0].description}`)
 }
 
 module.exports = {
