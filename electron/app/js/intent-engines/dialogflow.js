@@ -2,7 +2,7 @@ const dialogflow = require('dialogflow')
 const through2 = require('through2')
 const path = require('path')
 const uuid = require('uuid')
-const config = require(path.join(process.cwd(),'app','config','config.js'))
+const config = require('config/config')
 const event = require('js/events/events')
 
 function setup(){

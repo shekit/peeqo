@@ -8,6 +8,7 @@ const Eyes = require('js/face/eyes')
 const speak = require('js/senses/speak')
 const buttons = require('js/senses/buttons')
 const remote = require('electron').remote
+const weather = require('js/skills/weather')
 
 const listeners = require('js/events/listeners')()
 
@@ -32,7 +33,7 @@ event.emit('show-div', 'eyeWrapper')
 event.emit('start-blinking')
 
 setTimeout(()=>{
-	
+	weather.getWeather()
 },3000)
 
 // initiate buttons

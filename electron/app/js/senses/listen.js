@@ -3,7 +3,7 @@
 const record = require('node-record-lpcm16')
 const path = require('path')
 const os = require('os')
-const config = require(path.join(process.cwd(),'app','config','config.js'))
+const config = require('config/config')
 
 const {Detector, Models} = require('snowboy')
 
