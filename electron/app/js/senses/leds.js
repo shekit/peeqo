@@ -177,6 +177,7 @@ class Leds {
 	}
 }
 
+// make singleton
 const leds = new Leds()
 Object.freeze(leds)
 

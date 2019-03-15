@@ -47,6 +47,9 @@ class Eyes {
 	}
 
 	transitionFromMedia(){
+
+		// eye animation when transitioning after displaying media
+
 		this.leftEye.animate({ry:this.eyeSize, rx:this.eyeSize}, this.transitionSpeed, mina.easein())
 		this.rightEye.animate({ry:this.eyeSize, rx:this.eyeSize}, this.transitionSpeed, mina.easein(), ()=>{
 			console.log("transitioned back")
@@ -55,6 +58,9 @@ class Eyes {
 	}
 
 	transitionToMedia(){
+
+		// eye animation when transitioning to display media
+		
 		if(this.isBlinking){
 			this.stopBlinking()
 		}

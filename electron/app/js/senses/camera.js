@@ -25,7 +25,7 @@ class Camera{
 		event.on('camera-off', this.stopCamera)
 		event.on('camera-record', this.startRecording)
 		event.on('camera-stop', this.stopRecording)
-		
+
 	}
 
 	startCamera(){
@@ -53,6 +53,7 @@ class Camera{
 	}
 }
 
+// make singleton
 const camera = new Camera()
 Object.freeze(camera)
 

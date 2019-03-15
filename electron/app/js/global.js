@@ -40,6 +40,7 @@ buttons.initializeButtons()
 
 //initiate leds
 const leds = require('js/senses/leds')
+event.emit('led-on', {anim: 'circle', color: 'aqua'})
 
 // initiate camera
 const camera = require('js/senses/camera')
