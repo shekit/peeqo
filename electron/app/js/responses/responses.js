@@ -30,7 +30,7 @@ module.exports = {
 			anim:'circle',
 			color: 'aqua'
 		},
-		sound: 'alert',
+		sound: 'alert.wav',
 		cb: function(){
 			event.emit('speech-to-text')
 		}

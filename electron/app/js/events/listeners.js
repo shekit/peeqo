@@ -2,6 +2,7 @@ const event = require('js/events/events')
 const action = require('js/actions/actions')
 const common = require('js/helpers/common')
 const power = require('js/power/power')
+const speak = require('js/senses/speak')
 
 module.exports = () => {
 
@@ -20,5 +21,7 @@ module.exports = () => {
 	event.on('shutdown', power.shutdown)
 
 	event.on('reboot', power.reboot)
+
+	event.on('play-sound', speak.playSound)
 
 }

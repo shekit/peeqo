@@ -6,6 +6,7 @@ const event = require('js/events/events')
 const listen = require('js/senses/listen')
 const Eyes = require('js/face/eyes')
 const leds = require('js/senses/leds')
+const speak = require('js/senses/speak')
 
 const listeners = require('js/events/listeners')()
 
@@ -26,7 +27,8 @@ event.emit('show-div', 'eyeWrapper')
 event.emit('start-blinking')
 
 setTimeout(()=>{
-	event.emit("led-circle-out","red")
+	event.emit('play-sound','alert.wav')
 },3000)
+
 
 listen.startListening()
