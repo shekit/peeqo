@@ -1,5 +1,3 @@
-
-
 function showDiv(id){
 
 	// Hides all divs in majorDivs array and shows div passed as param

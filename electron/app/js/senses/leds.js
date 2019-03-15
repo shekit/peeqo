@@ -1,5 +1,6 @@
 const dotstar = require('js/lib/dotstar')
 const os = require('os')
+const event = require('js/events/events')
 
 if(os.arch == "arm"){
 	const SPI = require('pi-spi')
@@ -35,16 +36,19 @@ class Leds {
 			})
 		}
 
-		this.blink = this.blink.bind(this)
-		this.circleOut = this.circleOut.bind(this)
-		this.circle = this.circle.bind(this)
+		this.playAnimation = this.playAnimation.bind(this)
+		this.off = this.off.bind(this)
 
 		if(this.strip){
 			// only listen for led events on pi
-			event.on('led-blink', this.blink)
-			event.on('led-circle-out', this.circleOut)
-			event.on('led-circle', this.circle)
+			event.on('led-on', this.playAnimation)
+			event.on('led-off', this.off)
 		}
+	}
+
+	playAnimation(anim){
+		// @param {obj} anim - contains keys for anim type and color
+		this[anim.anim](anim.color)
 	}
 
 	blink(color='red', time=500, count=5, brightness=0.5) {

@@ -18,10 +18,29 @@ module.exports = () => {
 	// passes id of div to show
 	event.on('show-div', common.showDiv)
 
+
+	// POWER CONTROL
 	event.on('shutdown', power.shutdown)
 
 	event.on('reboot', power.reboot)
 
+
+	// AUDIO PLAYBACK
 	event.on('play-sound', speak.playSound)
+
+	event.on('set-volume', speak.setVolume)
+
+	// BUTTON PRESSES
+	event.on('btn-4-short-press',()=>{})
+	event.on('btn-4-long-press',()=>{})
+
+	event.on('btn-16-short-press',()=>{})
+	event.on('btn-16-long-press',()=>{})
+
+	event.on('btn-17-short-press',()=>{})
+	event.on('btn-17-long-press',()=>{})
+
+	event.on('btn-23-short-press',()=>{})
+	event.on('btn-23-long-press',()=>{})
 
 }
