@@ -125,16 +125,15 @@ async function setTimer(duration){
 	duration = parseInt(duration)
 	let loop = 1
 
-	let f = () =>{
-		console.log("play mediaa")
+	let afterTransition = () => {
 		let video = document.getElementById("video")
 		event.emit('show-div','videoWrapper')
 		video.play()
 	}
 
-	event.emit('transition-eyes-away', f)
+	event.emit('transition-eyes-away', afterTransition)
 
-	let done = await transitionBack(duration)
+	let done = await transitionBack(duration*loop)
 
 	return done
 }

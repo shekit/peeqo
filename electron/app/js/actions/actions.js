@@ -16,7 +16,7 @@ async function setAnswer(ans=null, overrides={}){
 	let q = await common.setQuery(ans)
 	console.log(`BACK IN FUNCTION ${q}`)
 
-	let r = await video.findOnline(q)
+	let r = await gif.findOnline(q)
 	console.log(`Returned video: ${r}`)
 
 	let d = await video.findDuration(r)
