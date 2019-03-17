@@ -32,6 +32,8 @@ function showDiv(id){
 
 async function setQuery(answer){
 
+	// returns path to local file or remote query terms
+
 	if(answer.type == 'local'){
 		// search from local folder
 		let file = await pickFile(path.join(process.cwd(),'app','media','responses',answer.localFolder))
@@ -79,7 +81,7 @@ async function pickFile(folderPath){
 
 	let chosenFile = mediaFiles[Math.floor(Math.random()*mediaFiles.length)]
 
-	return chosenFile
+	return path.join(folderPath,chosenFile)
 }
 
 function pickRandom(array){

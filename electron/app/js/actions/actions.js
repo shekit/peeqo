@@ -1,6 +1,8 @@
 const event = require('js/events/events')
 const responses = require('js/responses/responses')
 const common = require('js/helpers/common')
+const gif = require('js/helpers/gifs')
+const video = require('js/helpers/videos')
 
 async function setAnswer(ans=null, overrides={}){
 
@@ -12,18 +14,32 @@ async function setAnswer(ans=null, overrides={}){
 	Object.assign(ans, overrides)
 
 	let q = await common.setQuery(ans)
-
 	console.log(`BACK IN FUNCTION ${q}`)
+
+	let r = await video.findOnline(q)
+	console.log(`Returned video: ${r}`)
+
+	if(ans.type == 'remote'){
+		// search online for query n wait for it
+
+	} else if(ans.type == 'local'){
+		// local gifs/videos
+	}
+
+	
+	//wait to get api response
+	//wait to get gif/video
+
+	
 
 	if(ans.hasOwnProperty('cb')){
 		ans.cb()
 	}
-	
-
 }
 
 function hotword(){
-	setAnswer(responses.wakeword)
+	//setAnswer(responses.wakeword)
+	responses.wakeword.cb()
 }
 
 function parseIntent(cmd){
