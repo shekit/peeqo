@@ -57,7 +57,7 @@ class Eyes {
 		})
 	}
 
-	transitionToMedia(){
+	transitionToMedia(cb){
 
 		// eye animation when transitioning to display media
 		
@@ -68,6 +68,7 @@ class Eyes {
 		this.leftEye.animate({ry:this.transitionSize, rx:this.transitionSize}, this.transitionSpeed, mina.elastic())
 		this.rightEye.animate({ry:this.transitionSize, rx:this.transitionSize}, this.transitionSpeed, mina.elastic(), ()=>{
 			console.log("transitioned away")
+			cb()
 		})
 	}
 

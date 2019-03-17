@@ -19,6 +19,12 @@ async function setAnswer(ans=null, overrides={}){
 	let r = await video.findOnline(q)
 	console.log(`Returned video: ${r}`)
 
+	let d = await video.findDuration(r)
+	console.log(`Duration: ${d}`)
+
+	let o = await common.setTimer(d)
+	console.log(`Done in answer`)
+
 	if(ans.type == 'remote'){
 		// search online for query n wait for it
 

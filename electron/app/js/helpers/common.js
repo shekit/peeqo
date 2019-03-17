@@ -110,8 +110,38 @@ function pickRandom(array){
   	return array[randomNumber];
 }
 
+async function transitionBack(ms){
+	return new Promise((resolve) => {
+		let wait = setTimeout(()=>{
+			clearTimeout(wait)
+			event.emit('show-div','eyeWrapper')
+			event.emit('transition-eyes-back')
+			resolve(true)
+		}, ms)
+	})
+}
+
+async function setTimer(duration){
+	duration = parseInt(duration)
+	let loop = 1
+
+	let f = () =>{
+		console.log("play mediaa")
+		let video = document.getElementById("video")
+		event.emit('show-div','videoWrapper')
+		video.play()
+	}
+
+	event.emit('transition-eyes-away', f)
+
+	let done = await transitionBack(duration)
+
+	return done
+}
+
 module.exports = {
 	showDiv,
 	pickFile,
-	setQuery
+	setQuery,
+	setTimer
 }

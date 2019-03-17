@@ -3,13 +3,13 @@ const config = require('config/config.js')
 async function findOnline(query){
 
 	query = encodeURI(query)
-
+	// let json = null
 	try {
 		let response = await fetch(`https://apiv2.vlipsy.com/v1/vlips/search?q=${query}&key=${config.vlipsy.key}`)
 		if(!response.ok){
 			throw new Error(`Error accessing vlipsy. Check api key or query`)
 		}
-		let json = await response.json()
+		var json = await response.json()
 	} catch(e){
 		console.error(e)
 		return
@@ -26,12 +26,29 @@ async function findOnline(query){
 
 	const item = acceptableVlips[Math.floor(Math.random()*acceptableVlips.length)]
 
-	return item.media.mp4.urls
+	return item.media.mp4.url
 }
 
 
-function findDuration(){
+async function findDuration(path){
 
+	let endPauseDuration = 1200
+	let video = document.getElementById("video")
+	video.src = path
+	video.pause()
+
+	const canplay = await new Promise((resolve, reject) => {
+		video.addEventListener('canplay', (e)=>{
+			resolve(e.returnValue)
+		})
+	})
+
+	if(!canplay){
+		return 0
+	}
+
+	let duration = video.duration*1000+endPauseDuration
+	return duration
 }
 
 
@@ -40,5 +57,6 @@ function play(){
 }
 
 module.exports = {
-	findOnline
+	findOnline,
+	findDuration
 }
