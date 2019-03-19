@@ -6,3 +6,5 @@ npm-debug.log
 build
 app/config/config.js
 app/config/dialogflow.json
+app/config/Peeqo.pmdl
+app/config/common.res

@@ -29,7 +29,7 @@ function setup(){
 			audioConfig:{
 				audioEncoding: "AUDIO_ENCODING_LINEAR_16",
 				sampleRateHertz: 16000,
-				languageCode: 'en-US'
+				languageCode: config.speech.language
 			}
 		},
 		singleUtterance: true,
