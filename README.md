@@ -84,9 +84,12 @@ You can currently run the app on Mac OSX or Linux for development purposes. You 
   * This will not open chrome inspector panel. Run from electron folder
   * `npm start`
 
+
+
+
 ### Additional Steps
 
-You can setup these additional services as well. This list will keep growing. Feel free to add your own.
+You can setup these additional services as well. These are optional for initial setup. This list will keep growing. Feel free to add your own.
 
 #### Creating your own Wakeword:
 1. Repeat all the steps in Setup Wakeword, except for Step 3 & Step 4.
