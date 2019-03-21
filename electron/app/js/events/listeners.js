@@ -3,6 +3,8 @@ const action = require('js/actions/actions')
 const common = require('js/helpers/common')
 const power = require('js/power/power')
 const speak = require('js/senses/speak')
+const dialogflow = require('js/intent-engines/dialogflow')
+const mic = require('js/senses/mic')
 
 module.exports = () => {
 
@@ -13,6 +15,19 @@ module.exports = () => {
 
 	event.on('no-command', () => {
 		console.log("nothing heard")
+	})
+
+	event.on('speech-to-text', dialogflow.start)
+
+	event.on('end-speech-to-text', () =>{
+		
+		if(process.env.OS == "unsupported"){
+			document.getElementById("wakeword").style.backgroundColor = ""
+			mic.startMic()
+		} else {
+			event.emit('pipe-to-wakeword')
+		}
+		
 	})
 
 	// passes id of div to show

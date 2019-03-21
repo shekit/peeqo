@@ -3,7 +3,14 @@
 require('app-module-path').addPath(__dirname)
 
 const event = require('js/events/events')
-const listen = require('js/senses/listen')
+const mic = require('js/senses/mic')
+
+var listen = null
+if(process.env.OS !== 'unsupported'){
+	console.log('ljl')
+	listen = require('js/senses/listen')
+}
+
 const Eyes = require('js/face/eyes')
 const speak = require('js/senses/speak')
 const buttons = require('js/senses/buttons')
@@ -46,5 +53,14 @@ event.emit('led-on', {anim: 'circle', color: 'aqua'})
 // initiate camera
 const camera = require('js/senses/camera')
 
-// initiate listening
-listen.startListening()
+// initiate listening or show wakeword button
+if(process.env.OS == 'unsupported'){
+	document.getElementById("wakeword").addEventListener('click', (e) => {
+		e.preventDefault()
+		document.getElementById("wakeword").style.backgroundColor = "red"
+		event.emit('wakeword')
+	})
+} else {
+	listen.startListening()
+	document.getElementById("wakeword").style.display = "none"
+}

@@ -63,3 +63,9 @@ html, body, div {
 	pointer-events: none;
 	text-transform: capitalize;
 }
+
+/* Debug hotword link */
+#wakeword{
+	position: absolute;
+	z-index: 100;
+}

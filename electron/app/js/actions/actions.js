@@ -57,7 +57,9 @@ function parseIntent(cmd){
 		return
 	}
 
-	setAnswer(responses[cmd.intent])
+	console.log(cmd)
+
+	setAnswer(responses[cmd.intent], {type:'remote'})
 }
 
 module.exports = {

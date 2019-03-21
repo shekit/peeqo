@@ -8,8 +8,9 @@ const config = require('config/config')
 const {Detector, Models} = require('snowboy')
 
 const event = require('js/events/events')
+const mic = require('js/senses/mic')
 
-const dialogflow = require('js/intent-engines/dialogflow')
+// const dialogflow = require('js/intent-engines/dialogflow')
 
 function setupSnowboy(){
 	//SNOWBOY WAKEWORD DETECTOR
@@ -53,10 +54,10 @@ function startListening(){
 
 	const {recorder, recorderOpts} = setupRecorder()
 
-	const {sessionClient, dialogflowRequest} = dialogflow.setup()
+	// const {sessionClient, dialogflowRequest} = dialogflow.setup()
 	
-	//start mic
-	const mic = record.start(recorderOpts)
+	// start mic
+	// const mic = record.start(recorderOpts)
 
 	// WAKEWORD SNOWBOY EVENTS
 	wakewordDetector.on('unpipe', (src) => {
@@ -82,18 +83,14 @@ function startListening(){
 		event.emit("wakeword")
 
 		//unpipe recording from wakeword listener
-		mic.unpipe(wakewordDetector)
+		mic.getMic().unpipe(wakewordDetector)
 	})
 
-	event.on('speech-to-text', () => {
-		//pipe mic to speech to text engine
-		let stt = new dialogflow.DialogflowSpeech(mic, sessionClient, dialogflowRequest, wakewordDetector)
-		
-		event.emit('start-stt')
-
+	event.on('pipe-to-wakeword', () => {
+		mic.getMic().pipe(wakewordDetector)
 	})
 
-	mic.pipe(wakewordDetector)
+	mic.getMic().pipe(wakewordDetector)
 }
 
 module.exports = {

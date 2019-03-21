@@ -4,6 +4,7 @@ const path = require('path')
 const uuid = require('uuid')
 const config = require('config/config')
 const event = require('js/events/events')
+const mic = require('js/senses/mic')
 
 function setup(){
 	// DIALOGFLOW
@@ -39,9 +40,17 @@ function setup(){
 	return {sessionClient, dialogflowRequest}
 }
 
+function start(){
+	const {sessionClient, dialogflowRequest} = setup()
+
+	let stt = new DialogflowSpeech(sessionClient, dialogflowRequest)
+	
+	event.emit('start-stt')
+}
+
 class DialogflowSpeech {
 
-	constructor(mic, client, request, wakewordDetector){
+	constructor(client, request){
 		this.request = request
 		this.stream = client.streamingDetectIntent()
 		this.result = ''
@@ -49,8 +58,7 @@ class DialogflowSpeech {
 		this.listenFor = 5000
 		this.intentObj = {}
 		this.sttStream = null
-		this.mic = mic
-		this.wakewordDetector = wakewordDetector
+		// this.wakewordDetector = wakewordDetector
 
 		this.stream.write(this.request)
 
@@ -77,7 +85,7 @@ class DialogflowSpeech {
 				console.log('UNPIPING DIALOGFLOW > QUERY TIME EXCEEDED')
 				self.unpipeTimer = null
 				self.sttStream.unpipe(self.stream)
-				self.mic.unpipe(self.sttStream)
+				mic.getMic().unpipe(self.sttStream)
 			}, self.listenFor)
 		})
 
@@ -96,7 +104,7 @@ class DialogflowSpeech {
 				self.result = self.intentObj
 
 				self.sttStream.unpipe(self.stream)
-				self.mic.unpipe(self.sttStream)
+				mic.getMic().unpipe(self.sttStream)
 			}
 		})
 
@@ -138,20 +146,23 @@ class DialogflowSpeech {
 			self.intentObj = null
 			self.sttStream = null
 
-			self.mic.pipe(self.wakewordDetector)
+			event.emit('end-speech-to-text')
 
-			self.mic = null
-			self.wakewordDetector = null
+			// self.mic.pipe(self.wakewordDetector)
+
+			// self.mic = null
+			// self.wakewordDetector = null
 
 			event.removeListener('start-speech-to-text', self.startStream)
 
 		})
 
-		this.mic.pipe(this.sttStream).pipe(this.stream)
+		mic.getMic().pipe(this.sttStream).pipe(this.stream)
 	}
 }
 
 module.exports = {
 	setup,
+	start,
 	DialogflowSpeech
 }
