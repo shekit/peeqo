@@ -69,7 +69,7 @@ You can currently run the app on Mac OSX or Linux for development purposes. You 
 * **Install snowboy dependencies on Linux**
   * `sudo apt-get install swig3.0 python-pyaudio python3-pyaudio sox`
   * `pip install pyaudio`
-  * `sudo apt-get install libatlas-base-dev`
+  * `sudo apt-get install libmagic-dev libatlas-base-dev`
 * **Clone github repo:**
   * `git clone https://github.com/shekit/peeqo.git`
 * **CD into github folder:**
