@@ -21,6 +21,7 @@ class Mic {
 	startMic(){
 		this.mic = null
 		this.mic = record.start(this.recorderOpts)
+		return this.mic
 	}
 
 	getMic(){

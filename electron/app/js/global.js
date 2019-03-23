@@ -7,7 +7,6 @@ const mic = require('js/senses/mic')
 
 var listen = null
 if(process.env.OS !== 'unsupported'){
-	console.log('ljl')
 	listen = require('js/senses/listen')
 }
 

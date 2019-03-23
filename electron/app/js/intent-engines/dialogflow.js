@@ -157,7 +157,7 @@ class DialogflowSpeech {
 
 		})
 
-		mic.getMic().pipe(this.sttStream).pipe(this.stream)
+		mic.startMic().pipe(this.sttStream).pipe(this.stream)
 	}
 }
 

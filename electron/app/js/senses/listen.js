@@ -80,14 +80,16 @@ function startListening(){
 
 		console.log("WAKEWORD > DETECTED")
 
-		event.emit("wakeword")
+		
 
 		//unpipe recording from wakeword listener
 		mic.getMic().unpipe(wakewordDetector)
+		event.emit("wakeword")
 	})
 
 	event.on('pipe-to-wakeword', () => {
-		mic.getMic().pipe(wakewordDetector)
+		mic.startMic().pipe(wakewordDetector)
+		// mic.getMic().pipe(wakewordDetector)
 	})
 
 	mic.getMic().pipe(wakewordDetector)
