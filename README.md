@@ -76,7 +76,7 @@ You can currently run the app on Mac OSX or Linux for development purposes. You 
   * `cd /path/to/repo/electron`
 * **Install packages:**
   * `npm install`
-  * `./node_modules/.bin/electron-rebuild --pre-gyp-rebuild`
+  * `./node_modules/.bin/electron-rebuild --pre-gyp-fix`
 * **Run app in Debug Mode:**
   * This will open the chrome inspector panel. Run from electron folder
   * `NODE_ENV=debug npm start`
