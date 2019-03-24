@@ -117,7 +117,7 @@ You can currently run the app on Mac OSX or Ubuntu14.04 for development purposes
 
 #### Setup on Unsupported OS (Ubuntu 18.04, Debian, Linux distros):
 
-* **Follow all steps for Ubuntu 14.04 except Step 3 to install Snowboy**
+* Follow all steps for Ubuntu 14.04 except Step 3 to install Snowboy
 * `sudo apt install libgconf2-4`
 * Run app with correct flag:
   * `NODE_ENV=debug OS=unsupported npm start`
