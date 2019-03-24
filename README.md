@@ -54,7 +54,9 @@ After following the two steps above and entering the necessary keys and filepath
 
 ### Setup on System
 
-You can currently run the app on Mac OSX or Linux for development purposes. You can develop on your system and then push it to your Peeqo's raspberry pi. There is no support for running on Windows right now.
+You can currently run the app on Mac OSX or Ubuntu14.04 for development purposes. You can develop on your system and then push it to your Peeqo's raspberry pi. On other systems, if wakeword detection is unsupported, I have added a small button on the top left corner to simulate a wakeword. 
+
+#### Setup on Mac OSX:
 
 * **Install node version**
   * Select the installer for your OS from this link - <a href="https://nodejs.org/en/blog/release/v8.15.1/" target="_blank">https://nodejs.org/en/blog/release/v8.15.1/</a>
@@ -83,6 +85,44 @@ You can currently run the app on Mac OSX or Linux for development purposes. You 
 * **Run app in Production Mode:**
   * This will not open chrome inspector panel. Run from electron folder
   * `npm start`
+  
+#### Setup on Ubuntu 14.04:
+* **Install node version (8.15.1)**
+  * `curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -`
+  * `sudo apt-get install -y nodejs`
+  * Check node and npm version
+    * `node -v // 8.15.1`
+    * `npm -v // 6.4.1 or higher`
+    * You can also use nvm to install node 8.15.1 if you already have another node version installed - https://github.com/creationix/nvm
+* **Install git & pip:**
+  * `sudo apt-get install git python-pip -y`
+* **Install snowboy dependencies:**
+  * `sudo apt-get install swig3.0 python-pyaudio python3-pyaudio sox`
+  * `pip install pyaudio`
+  * `sudo apt-get install libmagic-dev libatlas-base-dev`
+* **Clone github repo:**
+  * `git clone https://github.com/shekit/peeqo.git`
+* **CD into github folder:**
+  * `cd /path/to/repo/electron`
+* **Install packages:**
+  * `npm install`
+  * `./node_modules/.bin/electron-rebuild --pre-gyp-fix`
+* **Run app in Debug Mode:**
+  * This will open the chrome inspector panel. Run from electron folder
+  * `NODE_ENV=debug npm start`
+* **Run app in Production Mode:**
+  * This will not open chrome inspector panel. Run from electron folder
+  * npm start
+
+
+#### Setup on Unsupported OS (Ubuntu 18.04, Debian, Linux distros):
+
+* **Follow all steps for Ubuntu 14.04 except Step 3 to install Snowboy**
+* `sudo apt install libgconf2-4`
+* Run app with correct flag:
+  * `NODE_ENV=debug OS=unsupported npm start`
+  * This will show a hotword button in top left corner of the screen. Click this button and speak your command to simulate wakeword detection
+
 
 
 
