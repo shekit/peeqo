@@ -14,8 +14,12 @@ if os.uname()[4].lower().startswith("arm"):
 
 if isPi:
 	from picamera import PiCamera 
-	camera = PiCamera()
-	camera.resolution = (800,480)
+	try:
+		camera = PiCamera()
+		camera.resolution = (800,480)
+	except:
+		print "There is no camera connected"
+		return
 
 def exit_handler():
 	if camera:

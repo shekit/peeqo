@@ -5,8 +5,8 @@ module.exports = {
         max_mp4_size: 700000  // max video size it should try to download
 	},
 	speech: {
-        projectId: '', // your dialogflow project name
-        dialogflowKey: '', // *.json - name of your dialogflow key file - should be stored in app/config/
+        projectId: 'peeqo', // your dialogflow project name
+        dialogflowKey: 'dialogflow.json', // *.json - name of your dialogflow key file - should be stored in app/config/
         wakeword: "peeqo", // you can change this wakeword if you record a differnt one on snowboy.kitt.ai
         language: "en-US", // find supported language codes - https://cloud.google.com/dialogflow-enterprise/docs/reference/language
         model: "Peeqo.pmdl", // The name of your model - name model downloaded from snowboy.kitt.ai - should be stored in app/config
