@@ -1,7 +1,9 @@
 #!/bin/bash
 
-cd ~/peeqo-v2-tests/python-cam-test
+# starts bg script to access camera
+cd ~/peeqo/python
 python zero.py &
 
-cd ~/peeqo-v2-tests
+
+cd ~/peeqo/electron
 ./node_modules/.bin/electron main.js
