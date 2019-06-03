@@ -19,7 +19,6 @@ if isPi:
 		camera.resolution = (800,480)
 	except:
 		print "There is no camera connected"
-		quit()
 
 def exit_handler():
 	if camera:
@@ -41,13 +40,13 @@ class ControlRPC(object):
 		return "connected"
 
 	def startCamera(self):
-		if isPi:
+		if isPi and camera:
 			camera.start_preview()
 
 		print "start preview"
 
 	def stopCamera(self):
-		if isPi:
+		if isPi and camera:
 			camera.stop_preview()
 		print "stop preview"
 
