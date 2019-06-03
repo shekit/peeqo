@@ -4,7 +4,7 @@
 
 [Service]
 	Type=idle
-	ExecStart=/home/pi/peeqo-v2-tests/shell_scripts/launch.sh
+	ExecStart=/home/pi/peeqo/scripts/launch.sh
 	User=pi
 
 [Install]
