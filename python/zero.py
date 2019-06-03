@@ -19,7 +19,7 @@ if isPi:
 		camera.resolution = (800,480)
 	except:
 		print "There is no camera connected"
-		return
+		quit()
 
 def exit_handler():
 	if camera:
