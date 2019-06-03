@@ -1,0 +1,11 @@
+[Unit]
+	Description=Peeqo Auto Start
+	After=multi-user.target
+
+[Service]
+	Type=idle
+	ExecStart=/home/pi/peeqo-v2-tests/shell_scripts/launch.sh
+	User=pi
+
+[Install]
+	WantedBy=multi-user.target

@@ -3,7 +3,7 @@ const os = require('os')
 
 if(os.arch() == 'arm'){
 	const gpio = require('rpi-gpio')
-	gpio.setMod(gpio.MODE_BCM)
+	gpio.setMode(gpio.MODE_BCM)
 	let gpios = [4,16,17,23]
 
 	for(var i in gpios){

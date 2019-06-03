@@ -89,7 +89,6 @@ function startListening(){
 
 	event.on('pipe-to-wakeword', () => {
 		mic.startMic().pipe(wakewordDetector)
-		// mic.getMic().pipe(wakewordDetector)
 	})
 
 	mic.getMic().pipe(wakewordDetector)
