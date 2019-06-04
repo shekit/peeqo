@@ -2,6 +2,10 @@
 
 Full assembly instructions can be found in the wiki [here](https://github.com/shekit/peeqo/wiki/Assembly)
 
+# Setup your Dev Machine
+
+Instructions to get the application running on your dev machine for development can be found [here](https://github.com/shekit/peeqo/wiki/setting-up-dev-machine)
+
 # Wiki
 
 The growing documentation can be found in the wiki [here](https://github.com/shekit/peeqo/wiki)
