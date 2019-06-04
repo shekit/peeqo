@@ -1,6 +1,18 @@
 # Get a Peeqo Dev Kit
 Get on the waitlist for a peeqo dev kit? Enter your email here - http://bit.ly/2TyocgY
 
+# Getting your Peeqo up and running
+
+0. [Unboxing](#step-0-unboxing)
+1. [Setup SD Card](#step-1-setup-sd-card)
+2. [Assemble Peeqo](#step-2-assemble-peeqo)
+
+## Step 0: Unboxing
+
+## Step 1: Setup SD Card
+
+## Step 2: Assemble Peeqo
+
 # Setup Instructions
 
 ## Getting Started:
