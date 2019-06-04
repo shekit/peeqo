@@ -11,10 +11,74 @@ Get on the waitlist for a peeqo dev kit? Enter your email here - http://bit.ly/2
 ## Step 0: Unboxing
 
 [![IMAGE ALT TEXT](http://img.youtube.com/vi/bxs5D1jEqhg/0.jpg)](http://www.youtube.com/watch?v=bxs5D1jEqhg "Step 0: Unboxing Peeqo")
+*Click on the image above to view the video*
 
 ## Step 1: Setup SD Card
 
+1. Download Peeqo Image <a href="https://brew.sh/">here</a>
+2. Download Etcher <a href="https://www.balena.io/etcher/">https://www.balena.io/etcher/</a>
+3. Insert SD card into your computer
+4. Launch BalenaEtcher
+5. Select peeqo.dmg from your computer
+6. Flash to SD card using BalenaEtcher
+
 ## Step 2: Assemble Peeqo
+
+Click on each image to view the video of that step
+
+1. **Preparing the Base**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/asGtzArevEk/0.jpg)](http://www.youtube.com/watch?v=asGtzArevEk "Step 1: Prepaing the base")
+
+2. **Attaching the cloth to the base**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/Mm2ejSR9dUY/0.jpg)](http://www.youtube.com/watch?v=Mm2ejSR9dUY "Step 2: Attaching the cloth to the base")
+
+3. **Adding the circuit to the base**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/3Y6i05UG2zY/0.jpg)](http://www.youtube.com/watch?v=3Y6i05UG2zY "Step 3: Adding the circuit to the base")
+
+4. **Preparing the Servos**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/cbPJ9k9ZpDo/0.jpg)](http://www.youtube.com/watch?v=cbPJ9k9ZpDo "Step 4: Preparing the Servos")
+
+5. **Attaching servo brackets to the base**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/AuUl0MYjhFw/0.jpg)](http://www.youtube.com/watch?v=AuUl0MYjhFw "Step 5: Attaching servo brackets to the base")
+
+6. **Attaching the servos to the base**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/mwGkEYVryPc/0.jpg)](http://www.youtube.com/watch?v=mwGkEYVryPc "Step 6: Attaching the servos to the base")
+
+7. **Attaching the servo arms**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/IWbyZ7jbW6c/0.jpg)](http://www.youtube.com/watch?v=IWbyZ7jbW6c "Step 7: Attaching the servo arms")
+
+8. **Assembling the top platform**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/OJdUkayb2uI/0.jpg)](http://www.youtube.com/watch?v=OJdUkayb2uI "Step 8: Assembling the top platform")
+
+9. **Attaching speakers to the top platform**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/zbHdHHfPsiI/0.jpg)](http://www.youtube.com/watch?v=zbHdHHfPsiI "Step 9: Attaching speakers to the top platform")
+
+10. **Attaching top platform to the base**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/HuqUfwA85-E/0.jpg)](http://www.youtube.com/watch?v=HuqUfwA85-E "Step 10: Attaching top platform to the base")
+
+11. **Completing the cloth covering**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/F4QKWjhrmWI/0.jpg)](http://www.youtube.com/watch?v=F4QKWjhrmWI "Step 11: Completing the cloth covering")
+
+12. **Attaching the bottom half of the head**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/Us1dXoi2-Cs/0.jpg)](http://www.youtube.com/watch?v=Us1dXoi2-Cs "Step 12: Attaching the bottom half of the head")
+
+13. **Assembling the circuit**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/FlEGf52reFM/0.jpg)](http://www.youtube.com/watch?v=FlEGf52reFM "Step 13: Assembling the circuit")
+
+14. **Placing the circuit in the head**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/yE4vAcCPYdE/0.jpg)](http://www.youtube.com/watch?v=yE4vAcCPYdE "Step 14: Placing the circuit in the head")
+
+15. **Adding the top half of the head**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/_rUKeINSQF4/0.jpg)](http://www.youtube.com/watch?v=_rUKeINSQF4 "Step 15: Adding the top half of the head")
+
+16. **Adding the LED ring**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/JScpXW7UROM/0.jpg)](http://www.youtube.com/watch?v=JScpXW7UROM "Step 16: Adding the LED ring")
+
+17. **Assembling the top head and button**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/3Z_xmYk2b14/0.jpg)](http://www.youtube.com/watch?v=3Z_xmYk2b14 "Step 17: Assembling the top head and button")
+
+18. **Completing the build**
+[![IMAGE ALT TEXT](http://img.youtube.com/vi/dAsTdcBwADM/0.jpg)](http://www.youtube.com/watch?v=dAsTdcBwADM "Step 18: Completing the build")
 
 ## Step 3: Software Setup
 
