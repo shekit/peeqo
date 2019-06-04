@@ -4,23 +4,23 @@ Get on the waitlist for a peeqo dev kit? Enter your email here - http://bit.ly/2
 # Getting your Peeqo up and running
 
 0. [Unboxing](#step-0-unboxing)
-1. [Pre-Assembly Setup](#step-1-setup-sd-card)
+1. [Pre-Assembly Setup](#step-1-pre-assembly-setup)
 2. [Assemble Peeqo](#step-2-assemble-peeqo)
-3. [Post Assembly Setup](#step-3-software-setup)
+3. [Post Assembly Setup](#step-3-post-assembly-setup)
 
 ## Step 0: Unboxing
 
 [![IMAGE ALT TEXT](http://img.youtube.com/vi/bxs5D1jEqhg/0.jpg)](http://www.youtube.com/watch?v=bxs5D1jEqhg "Step 0: Unboxing Peeqo")<br/>
 *Click on the image above to view the video*
 
-## Step 1: Setup SD Card
+## Step 1: Pre-Assembly Setup
 
-1. Download Peeqo Image <a href="https://brew.sh/">here</a>
+1. Download Peeqo Image <a href="https://drive.google.com/file/d/1FCyEI76DlH72MTe-Vxs9MDomqwWjWkvm/view?usp=sharing">here</a> (~16GB)
 2. Download Etcher <a href="https://www.balena.io/etcher/">https://www.balena.io/etcher/</a>
-3. Insert SD card into your computer
+3. Insert included micro SD card into your computer (minimum 16GB)
 4. Launch BalenaEtcher
-5. Select peeqo.dmg from your computer
-6. Flash to SD card using BalenaEtcher
+5. Select `peeqo.dmg` from your computer
+6. Flash to micro SD card using BalenaEtcher
 
 ## Step 2: Assemble Peeqo
 
@@ -80,7 +80,7 @@ Click on each image to view the video of that step
 18. **Completing the build**<br/>
 [![IMAGE ALT TEXT](http://img.youtube.com/vi/dAsTdcBwADM/0.jpg)](http://www.youtube.com/watch?v=dAsTdcBwADM "Step 18: Completing the build")
 
-## Step 3: Software Setup
+## Step 3: Post Assembly Setup
 
 
 
@@ -126,7 +126,7 @@ Peeqo uses Google's dialogflow for Speech-to-text. You can replace this with ano
 10. Click on the link labeled Service Account. This will take you to your google cloud console page
 11. In the cloud console page, click on the three vertical dots in the Action column of this Service Account and select “Create Key”
 12. Make sure JSON is selected and click create.
-13. This will download a JSON file to your computer. Keep it safe and never share it.
+13. This will download a JSON file to your computer. Keep it safe and never share it. Rename this file `dialogflow.json`
 14. Place this file in `/electron/app/config/`
 15. Enter the full name of this file in `/electron/app/config/config-dev.js` -> `speech.dialogflowKey`. You can rename the file if needed to make it simpler.
 16. This agent should give you a good starting of some existing responses. You can now add your own responses and intents to it on dialogflow to add functionality. Go to <a href="https://dialogflow.com/docs/getting-started" target="_blank">https://dialogflow.com/docs/getting-started</a> to learn more.
