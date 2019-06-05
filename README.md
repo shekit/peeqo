@@ -1,3 +1,7 @@
+# Discord
+
+Join us on [discord](http://bit.ly/2HLtxez)
+
 # Assembly Instructions
 
 Full assembly instructions can be found in the wiki [here](https://github.com/shekit/peeqo/wiki/Assembly)
