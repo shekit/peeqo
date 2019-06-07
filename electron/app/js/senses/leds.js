@@ -104,7 +104,7 @@ class Leds {
 		}
 
 		let firstLed = start
-		var currentlyOn = []
+		let currentlyOn = []
 
 		let moveInterval = setInterval(() => {
 			currentlyOn.push(firstLed)
@@ -116,7 +116,7 @@ class Leds {
 			}
 
 			for(let i=0;i<currentlyOn.length;i++){
-				this.strip.set(this.currentlyOn[i],...this.colors[color], brightness)
+				this.strip.set(currentlyOn[i],...this.colors[color], brightness)
 			}
 
 			this.strip.sync()
