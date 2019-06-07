@@ -32,7 +32,7 @@ class Leds {
 
 		this.strip = null
 
-		if(os.arch == "arm" && spi != null){
+		if(spi != null){
 			// only available on pi
 			this.strip = new dotstar.Dotstar(spi, {
 				length: this.length
@@ -103,7 +103,7 @@ class Leds {
 			return
 		}
 
-		let firstLed = start
+		var firstLed = start
 		var currentlyOn = []
 
 		let moveInterval = setInterval(() => {
@@ -116,7 +116,8 @@ class Leds {
 			}
 
 			for(let i=0;i<currentlyOn.length;i++){
-				this.strip.set(currentlyOn[i],...this.colors[color], this.brightness)
+				this.strip.set(currentlyOn[i],...this.colors[color], brightness)
+				//console.log(currentlyOn[i])
 			}
 
 			this.strip.sync()
