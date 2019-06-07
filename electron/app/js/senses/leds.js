@@ -104,7 +104,7 @@ class Leds {
 		}
 
 		let firstLed = start
-		let currentlyOn = []
+		var currentlyOn = []
 
 		let moveInterval = setInterval(() => {
 			currentlyOn.push(firstLed)
