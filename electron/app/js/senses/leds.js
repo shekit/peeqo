@@ -78,8 +78,8 @@ class Leds {
 	}
 
 	circle(color="aqua"){
-		this.trail(0,5)
-		this.trail(11,6)
+		this.trail(color, 0,5)
+		this.trail(color, 11,6)
 
 		setTimeout(() => {
 			this.trail(color, 5,0,false)
@@ -117,12 +117,11 @@ class Leds {
 
 			for(let i=0;i<currentlyOn.length;i++){
 				this.strip.set(currentlyOn[i],...this.colors[color], brightness)
-				//console.log(currentlyOn[i])
 			}
 
 			this.strip.sync()
 
-			console.log(currentlyOn)
+			//console.log(currentlyOn)
 
 			if(start < finish){
 				// move in clockwise direction
@@ -154,10 +153,12 @@ class Leds {
 		let removeInterval = setInterval(() => {
 			if(onLeds.length != 0){
 				let offLed = onLeds.shift()
+
 				this.strip.set(offLed, ...this.colors["black"],0)
 			} else {
 				clearInterval(removeInterval)
 				removeInterval = null
+
 				this.strip.clear()
 			}
 
