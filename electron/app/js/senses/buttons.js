@@ -1,8 +1,10 @@
 const event = require('js/events/events')
 const os = require('os')
 
+let gpio = null
+
 if(os.arch() == 'arm'){
-	const gpio = require('rpi-gpio')
+	gpio = require('rpi-gpio')
 	gpio.setMode(gpio.MODE_BCM)
 	let gpios = [4,16,17,23]
 
@@ -14,7 +16,7 @@ if(os.arch() == 'arm'){
 
 function initializeButtons(){
 
-	if(os.arch() != 'arm'){
+	if(os.arch() != 'arm' || gpio == null){
 		return
 	}
 

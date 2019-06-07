@@ -53,13 +53,13 @@ event.emit('led-on', {anim: 'circle', color: 'aqua'})
 const camera = require('js/senses/camera')
 
 // initiate listening or show wakeword button
-if(process.env.OS == 'unsupported'){
-	document.getElementById("wakeword").addEventListener('click', (e) => {
-		e.preventDefault()
-		document.getElementById("wakeword").style.backgroundColor = "red"
-		event.emit('wakeword')
-	})
-} else {
-	listen.startListening()
-	document.getElementById("wakeword").style.display = "none"
-}
+// if(process.env.OS == 'unsupported'){
+// 	document.getElementById("wakeword").addEventListener('click', (e) => {
+// 		e.preventDefault()
+// 		document.getElementById("wakeword").style.backgroundColor = "red"
+// 		event.emit('wakeword')
+// 	})
+// } else {
+// 	listen.startListening()
+// 	document.getElementById("wakeword").style.display = "none"
+// }
