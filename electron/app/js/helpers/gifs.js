@@ -8,7 +8,7 @@ function findOnline(query){
 
 			if(err || !res) reject(`Got error or no response when searching for "${query}" from Giphy`);
 
-			console.log(res.data.images)
+			//console.log(res.data.images)
 
 			const gif = res.data.images.original_mp4.mp4
 

@@ -60,6 +60,6 @@ const camera = require('js/senses/camera')
 // 		event.emit('wakeword')
 // 	})
 // } else {
-// 	listen.startListening()
+listen.startListening()
 // 	document.getElementById("wakeword").style.display = "none"
 // }

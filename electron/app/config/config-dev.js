@@ -1,6 +1,6 @@
 module.exports = {
 	giphy:{
-		key:'dc6zaTOxFJmzC', // public giphy key - you can get your own from https://developers.giphy.com/docs/
+		key:'', // get your own from https://developers.giphy.com/docs/
 		max_gif_size: 800000, // max gif size it should try to download
         max_mp4_size: 700000  // max video size it should try to download
 	},
