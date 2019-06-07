@@ -19,9 +19,11 @@ var createWindow = () => {
 		// For Raspberry Pi
 
 		if(process.env.NODE_ENV == "debug"){
+			// open console only if NODE_ENV=debug is set
 			mainWindow.webContents.openDevTools();
 		}
 
+		// make application full screen
 		mainWindow.setMenu(null);
 		mainWindow.setFullScreen(true);
 		mainWindow.maximize();
@@ -30,10 +32,9 @@ var createWindow = () => {
 
 		// For Desktop OS - Mac, Windows, Linux
 
-		if(process.env.NODE_ENV == "debug"){
-			mainWindow.webContents.openDevTools();
-		} 
-
+		// always open console on dev machine
+		mainWindow.webContents.openDevTools();
+		
 	}
 }
 

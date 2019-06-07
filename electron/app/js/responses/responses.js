@@ -1,5 +1,22 @@
 module.exports = {
 
+	/*
+	Obj Structure:
+
+	intentName: {
+		localFolder: 'xxx' <- Local folder in app/media/responses/ where you are storing local media responses
+		queryTerms: ['a','b','c'] <- what terms to use to query media from sources like giphy.com
+		servo: 'ccc' <- name of servo animation stored in app/media/servo_anims/ (without the .json)
+		led: {
+			anim: 'eee' <- name of animation, must be a function in app/js/senses/leds.js 
+			color: 'red' <- color leds, must be defined in app/js/senses/leds.js
+		}
+		sound: 'cccc.wav/mp3' <- mp3 or wav file located in app/media/sounds/
+		cb: function <- callback function to be called at end of response
+	}
+	*/
+
+	
 	confused: {
 		localFolder: 'confused',
 		queryTerms: ['shrug', 'confused', 'dont know'],

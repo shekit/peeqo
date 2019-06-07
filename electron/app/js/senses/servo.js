@@ -31,7 +31,7 @@ class Servo {
 		this.animate = this.animate.bind(this)
 		this.reset = this.animate.bind(this)
 
-		if(os.arch() == 'arm'){
+		if(PCA9685 != null){
 			this.pwm = new PCA9685(options, (err) => {
 				if(err) console.error(`Error initializing PCA9685 for servos`);
 
@@ -47,7 +47,7 @@ class Servo {
 	}
 
 	animate(animName){
-		let filepath = path.join(process.cwd(),'app','js','movement','anims', `${animName}.json`)
+		let filepath = path.join(process.cwd(),'app','media','servo_anims',`${animName}.json`)
 
 		fs.readFile(filepath, 'utf8', (err, contents) => {
 			if(err){

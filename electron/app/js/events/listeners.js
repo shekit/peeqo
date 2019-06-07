@@ -10,7 +10,7 @@ module.exports = () => {
 
 	event.on('wakeword', action.hotword)
 
-	// passes on response object from speech to text engine
+	// passes on response object from STT engine
 	event.on('final-command', action.parseIntent)
 
 	event.on('no-command', () => {
@@ -46,16 +46,32 @@ module.exports = () => {
 	event.on('set-volume', speak.setVolume)
 
 	// BUTTON PRESSES
-	event.on('btn-4-short-press',()=>{})
-	event.on('btn-4-long-press',()=>{})
+	event.on('btn-4-short-press',()=>{
+		console.log('btn 4 short press')
+	})
+	event.on('btn-4-long-press',()=>{
+		console.log('btn 4 long press')
+	})
 
-	event.on('btn-16-short-press',()=>{})
-	event.on('btn-16-long-press',()=>{})
+	event.on('btn-16-short-press',()=>{
+		console.log('btn 16 short press')
+	})
+	event.on('btn-16-long-press',()=>{
+		console.log('btn 16 short press')
+	})
 
-	event.on('btn-17-short-press',()=>{})
-	event.on('btn-17-long-press',()=>{})
+	event.on('btn-17-short-press',()=>{
+		console.log('btn 17 short press')
+	})
+	event.on('btn-17-long-press',()=>{
+		console.log('btn 17 short press')
+	})
 
-	event.on('btn-23-short-press',()=>{})
-	event.on('btn-23-long-press',()=>{})
+	event.on('btn-23-short-press',()=>{
+		console.log('btn 23 short press')
+	})
+	event.on('btn-23-long-press',()=>{
+		console.log('btn 23 short press')
+	})
 
 }

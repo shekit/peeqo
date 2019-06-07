@@ -5,8 +5,10 @@ require('app-module-path').addPath(__dirname)
 const event = require('js/events/events')
 const mic = require('js/senses/mic')
 
-var listen = null
+let listen = null
+
 if(process.env.OS !== 'unsupported'){
+	// only include snowboy for supported OS
 	listen = require('js/senses/listen')
 }
 
@@ -21,22 +23,29 @@ const listeners = require('js/events/listeners')()
 // keyboard shortcuts
 document.addEventListener("keydown", (e)=>{
 	if(e.which == 123){
-		//F12 show js console
+
+		// F12 - show js console
 		remote.getCurrentWindow().toggleDevTools()
+
 	} else if(e.which == 116){
-		//F5 refresh page
+
+		// F5 - refresh page
+		// make sure page is in focus, not console
 		location.reload()
+
 	}
 })
 
-// set audio levels
+// set audio volume level
+// 0 - mute
+// 1 - max
 event.emit('set-volume',0.4)
 
 // initiate eyes
 const eyes = new Eyes()
-
 event.emit('show-div', 'eyeWrapper')
 event.emit('start-blinking')
+
 
 setTimeout(()=>{
 	
@@ -53,13 +62,15 @@ event.emit('led-on', {anim: 'circle', color: 'aqua'})
 const camera = require('js/senses/camera')
 
 // initiate listening or show wakeword button
-// if(process.env.OS == 'unsupported'){
-// 	document.getElementById("wakeword").addEventListener('click', (e) => {
-// 		e.preventDefault()
-// 		document.getElementById("wakeword").style.backgroundColor = "red"
-// 		event.emit('wakeword')
-// 	})
-// } else {
-listen.startListening()
-// 	document.getElementById("wakeword").style.display = "none"
-// }
+if(process.env.OS == 'unsupported'){
+	// on certain linux systems and windows snowboy offline keyword detection does not work
+	// pass in OS=unsupported when starting application to show a clickable wakeword button instead
+	document.getElementById("wakeword").addEventListener('click', (e) => {
+		e.preventDefault()
+		document.getElementById("wakeword").style.backgroundColor = "red"
+		event.emit('wakeword')
+	})
+} else {
+	listen.startListening()
+	document.getElementById("wakeword").style.display = "none"
+}

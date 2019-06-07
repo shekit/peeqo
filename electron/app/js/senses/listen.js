@@ -19,7 +19,7 @@ function setupSnowboy(){
 
 	models.add({
 		file: path.join(process.cwd(),'app','config',config.speech.model),
-		sensitivity: config.speech.sensitivity,
+		sensitivity: config.speech.sensitivity, // adjust sensitivity if you are getting too many false positive or negatives
 		hotwords: config.speech.wakeword
 	})
 

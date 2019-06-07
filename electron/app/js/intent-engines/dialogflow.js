@@ -143,7 +143,7 @@ class DialogflowSpeech {
 			self.request = null
 			self.stream = null
 			self.result = null
-			self.intentObj = null
+			self.intentObj = {}
 			self.sttStream = null
 
 			event.emit('end-speech-to-text')

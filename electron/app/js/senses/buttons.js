@@ -16,7 +16,7 @@ if(os.arch() == 'arm'){
 
 function initializeButtons(){
 
-	if(os.arch() != 'arm' || gpio == null){
+	if(gpio == null){
 		return
 	}
 
