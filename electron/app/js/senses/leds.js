@@ -116,7 +116,7 @@ class Leds {
 			}
 
 			for(let i=0;i<currentlyOn.length;i++){
-				this.strip.set(currentlyOn[i],...this.colors[color], brightness)
+				this.strip.set(currentlyOn[i],...this.colors[color], this.brightness)
 			}
 
 			this.strip.sync()
