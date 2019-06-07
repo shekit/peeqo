@@ -2,9 +2,12 @@ const dotstar = require('js/lib/dotstar')
 const os = require('os')
 const event = require('js/events/events')
 
+let SPI = null
+let spi = null
+
 if(os.arch == "arm"){
-	const SPI = require('pi-spi')
-	const spi = SPI.initialize('/dev/spidev0.0')
+	SPI = require('pi-spi')
+	spi = SPI.initialize('/dev/spidev0.0')
 }
 
 class Leds {
@@ -29,7 +32,7 @@ class Leds {
 
 		this.strip = null
 
-		if(os.arch == "arm"){
+		if(os.arch == "arm" && spi != null){
 			// only available on pi
 			this.strip = new dotstar.Dotstar(spi, {
 				length: this.length
