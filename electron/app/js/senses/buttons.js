@@ -39,8 +39,9 @@ function initializeButtons(){
 
 			if(!longPressEventSent){
 				event.emit(`btn-${channel}-short-press`)
-				longPressEventSent = false
 			}
+
+			longPressEventSent = false
 			
 		} else if(value == true){
 			console.log(`Btn ${channel} pressed`)
