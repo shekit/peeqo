@@ -103,6 +103,10 @@ class DialogflowSpeech {
 
 				self.result = self.intentObj
 
+				if(self.sttStream == null){
+					return
+				}
+				
 				self.sttStream.unpipe(self.stream)
 				mic.getMic().unpipe(self.sttStream)
 			}
