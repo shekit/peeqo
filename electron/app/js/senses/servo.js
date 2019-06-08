@@ -1,5 +1,6 @@
 const path = require('path')
 const fs = require('fs')
+const os = require('os')
 const event = require('js/events/events')
 
 let i2cBus = null
