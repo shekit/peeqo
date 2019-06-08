@@ -27,8 +27,9 @@ function speak(text){
 function playSound(filename){
 	// plays passed in file located in app/media/sounds
 	// @param {string} filename - accepts .wav & .mp3 files located in app/media/sounds
+	console.log(`FILE: ${filename}`)
 
-	if(!filename.endsWith('.wav') || !filename.endsWith('.mp3')){
+	if(!filename.endsWith('.wav') && !filename.endsWith('.mp3')){
 		console.error(`File ${filename} is not supported`)
 		return
 	}

@@ -3,6 +3,10 @@ const giphy = require('giphy-api')(config.giphy.key);
 
 function findOnline(query){
 
+	if(!query){
+		return null
+	}
+
 	return new Promise((resolve, reject)=>{
 		giphy.translate(query, (err,res)=>{
 

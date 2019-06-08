@@ -8,52 +8,62 @@ async function setAnswer(ans=null, overrides={}){
 
 	// @param {obj} ans - the response object as defined in responses.js
 	// @param {obj} overrides - new keys to be added or overriden in ans param
-	console.log("ANSWER")
+	console.log("RESPONSE > START")
 
 	// merge overriden values and new values
 	Object.assign(ans, overrides)
 
 	let q = await common.setQuery(ans)
-	console.log(`BACK IN FUNCTION ${q}`)
+	console.log(`LOCAL FILE OR SEARCH QUERY > ${q}`)
 
-	let r = await gif.findOnline(q)
-	console.log(`Returned video: ${r}`)
-
-	let d = await video.findDuration(r)
-	console.log(`Duration: ${d}`)
-
-	let o = await common.setTimer(d)
-	console.log(`Done in answer`)
+	let r = null
 
 	if(ans.type == 'remote'){
-		// search online for query n wait for it
-
-	} else if(ans.type == 'local'){
-		// local gifs/videos
+		r = await gif.findOnline(q)
+		console.log(`MEDIA URL > ${r}`)
+	} else {
+		// local response
+		r = q
 	}
 
-	
-	//wait to get api response
-	//wait to get gif/video
+	let mediaType = await video.findMediaType(r)
+	let d = await video.findMediaDuration(r)
 
-	
+	console.log(`MEDIA DURATION > ${d}`)
 
+	if(Object.keys(ans.led).length != 0){
+		// run led animation
+		event.emit('led-on', {anim: ans.led.anim , color: ans.led.color })
+	}
+
+	if(ans.sound !== null){
+		event.emit('play-sound', ans.sound)
+	}
+
+	if(ans.servo !== null){
+		// move servo
+		event.emit('servo-move', ans.servo)
+	}
+
+	let o = await common.setTimer(d, mediaType)
+	console.log(`RESPONSE > END`)
+
+	// callback
 	if(ans.hasOwnProperty('cb')){
 		ans.cb()
 	}
 }
 
-function hotword(){
-	//setAnswer(responses.wakeword)
-	responses.wakeword.cb()
+function wakeword(){
+	setAnswer(responses.wakeword, {type:'wakeword'})
 }
 
 function parseIntent(cmd){
 	
 	if(!responses.hasOwnProperty(cmd.intent)){
 		// a response for this particular intent does not exist
-		console.error(`A response for "${cmd.queryText}" doesn't exist`)
-		setAnswer(responses.confused, {type:'remote'})
+		console.error(`A local response for "${cmd.queryText}" doesn't exist`)
+		setAnswer(responses.confused, {type:'local'})
 		return
 	}
 
@@ -63,6 +73,6 @@ function parseIntent(cmd){
 }
 
 module.exports = {
-	hotword,
+	wakeword,
 	parseIntent
 }

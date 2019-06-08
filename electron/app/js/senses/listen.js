@@ -54,11 +54,6 @@ function startListening(){
 
 	const {recorder, recorderOpts} = setupRecorder()
 
-	// const {sessionClient, dialogflowRequest} = dialogflow.setup()
-	
-	// start mic
-	// const mic = record.start(recorderOpts)
-
 	// WAKEWORD SNOWBOY EVENTS
 	wakewordDetector.on('unpipe', (src) => {
 		console.log("STOPPED PIPING > WAKEWORD")
@@ -80,14 +75,15 @@ function startListening(){
 
 		console.log("WAKEWORD > DETECTED")
 
-		
-
 		//unpipe recording from wakeword listener
 		mic.getMic().unpipe(wakewordDetector)
 		event.emit("wakeword")
 	})
 
 	event.on('pipe-to-wakeword', () => {
+		// prevent bug in arecord. WAV has 2gb file limit. After streaming 2GB it starts
+		// sending headers with no data
+		// possible short term solution: restart mic everytime after a response
 		mic.startMic().pipe(wakewordDetector)
 	})
 

@@ -4,6 +4,7 @@ const os = require('os')
 let gpio = null
 
 if(os.arch() == 'arm'){
+	// only include on raspberry pi
 	gpio = require('rpi-gpio')
 	gpio.setMode(gpio.MODE_BCM)
 	let gpios = [4,16,17,23]

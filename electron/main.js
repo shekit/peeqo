@@ -1,4 +1,4 @@
-'use stict'
+'use strict'
 
 const {app, BrowserWindow } = require('electron')
 const os = require('os')
@@ -10,8 +10,7 @@ var createWindow = () => {
 		height: 480
 	})
 
-	console.log(__dirname)
-
+	// display index.html 
 	mainWindow.loadURL('file://'+__dirname+'/app/index.html')
 
 	if(os.arch() == 'arm'){

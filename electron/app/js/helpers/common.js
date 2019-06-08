@@ -45,7 +45,31 @@ async function setQuery(answer){
 		let searchTerm = pickRandom(answer.queryTerms)
 		return searchTerm
 	} else {
+		// if type is wakeword or something else
 		return null
+	}
+}
+
+async function findLocalMediaType(filepath){
+
+	if(!filepath){
+		return null
+	}
+
+	let imgFiles = [".png", ".jpg", ".jpeg"]
+	let videoFiles = [".mp4", ".webp"]
+	let gifFiles = [".gif"]
+
+	if(imgFiles.includes(path.extname(filepath).toLowerCase())){
+		return "image"
+	}
+
+	if(videoFiles.includes(path.extname(filepath).toLowerCase())){
+		return "video"
+	}
+
+	if(gifFiles.includes(path.extname(filepath).toLowerCase())){
+		return "gif"
 	}
 }
 
@@ -69,7 +93,7 @@ async function pickFile(folderPath){
 	const fileExtensions = [".gif",".mp4",".webp",".png",".jpg",".jpeg"] //acceptable file extensions
 
 	const files = await readdir(folderPath)
-	console.log("GOT FILES", files)
+
 	let mediaFiles = files.filter((file)=>{
 		return fileExtensions.includes(path.extname(file).toLowerCase())
 	})
@@ -121,14 +145,24 @@ async function transitionBack(ms){
 	})
 }
 
-async function setTimer(duration){
+async function setTimer(duration, type){
+
+	if(!duration){
+		return null
+	}
+
 	duration = parseInt(duration)
 	let loop = 1
 
 	let afterTransition = () => {
-		let video = document.getElementById("video")
-		event.emit('show-div','videoWrapper')
-		video.play()
+		if(type == 'video'){
+			let video = document.getElementById("video")
+			event.emit('show-div','videoWrapper')
+			video.play()
+		} else if(type == 'gif' || type == 'img'){
+			let img = document.getElementById("gif")
+			event.emit('show-div', 'gifWrapper')
+		}
 	}
 
 	event.emit('transition-eyes-away', afterTransition)
@@ -142,5 +176,6 @@ module.exports = {
 	showDiv,
 	pickFile,
 	setQuery,
-	setTimer
+	setTimer,
+	findLocalMediaType
 }

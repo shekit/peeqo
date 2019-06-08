@@ -8,13 +8,13 @@ const mic = require('js/senses/mic')
 
 module.exports = () => {
 
-	event.on('wakeword', action.hotword)
+	event.on('wakeword', action.wakeword)
 
 	// passes on response object from STT engine
 	event.on('final-command', action.parseIntent)
 
 	event.on('no-command', () => {
-		console.log("nothing heard")
+		event.emit("led-on", {anim:'fadeOutError',color:'red'})
 	})
 
 	event.on('speech-to-text', dialogflow.start)
@@ -23,10 +23,11 @@ module.exports = () => {
 		
 		if(process.env.OS == "unsupported"){
 			document.getElementById("wakeword").style.backgroundColor = ""
-			mic.startMic()
+			//mic.startMic()
 		} else {
-			event.emit('pipe-to-wakeword')
+			//event.emit('pipe-to-wakeword')
 		}
+		event.emit('pipe-to-wakeword')
 		
 	})
 

@@ -15,12 +15,13 @@ if(process.env.OS !== 'unsupported'){
 const Eyes = require('js/face/eyes')
 const speak = require('js/senses/speak')
 const buttons = require('js/senses/buttons')
-const remote = require('electron').remote
 const weather = require('js/skills/weather')
 
 const listeners = require('js/events/listeners')()
 
 // keyboard shortcuts
+const remote = require('electron').remote
+
 document.addEventListener("keydown", (e)=>{
 	if(e.which == 123){
 
@@ -36,11 +37,6 @@ document.addEventListener("keydown", (e)=>{
 	}
 })
 
-// set audio volume level
-// 0 - mute
-// 1 - max
-event.emit('set-volume',0.4)
-
 // initiate eyes
 const eyes = new Eyes()
 event.emit('show-div', 'eyeWrapper')
@@ -54,12 +50,15 @@ setTimeout(()=>{
 // initiate buttons
 buttons.initializeButtons()
 
-//initiate leds
+//initiate leds and run initial animation
 const leds = require('js/senses/leds')
 event.emit('led-on', {anim: 'circle', color: 'aqua'})
 
 // initiate camera
 const camera = require('js/senses/camera')
+
+// set audio volume level. 0 - mute; 1-max
+event.emit('set-volume',0.4)
 
 // initiate listening or show wakeword button
 if(process.env.OS == 'unsupported'){

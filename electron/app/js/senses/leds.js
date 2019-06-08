@@ -51,6 +51,8 @@ class Leds {
 
 	playAnimation(anim){
 		// @param {obj} anim - contains keys for anim type and color
+		console.log(`LED anim: ${anim.anim} with color ${anim.color}`)
+
 		this[anim.anim](anim.color)
 	}
 
@@ -149,6 +151,28 @@ class Leds {
 		}, time)
 	}
 
+	fadeOutError(color='red', time=100){
+		let increment = 0.1
+		let fadeOutInterval = null
+		let brightness = 0.5
+
+		this.on(color, brightness)
+
+		fadeOutInterval = setInterval(() => {
+			this.strip.all(...this.colors[color], brightness)
+			this.strip.sync()
+
+			brightness-=increment
+
+			if(brightness<0){
+				clearInterval(fadeOutInterval)
+				fadeOutInterval = null
+				this.strip.clear()
+				this.strip.sync()
+			}
+		}, time)
+	}
+
 	clearLedTrail(onLeds, time=100){
 		let removeInterval = setInterval(() => {
 			if(onLeds.length != 0){
@@ -165,6 +189,8 @@ class Leds {
 			this.strip.sync()
 		}, time)
 	}
+
+
 
 	on(color, brightness=0.5){
 		if(!this.colors.hasOwnProperty(color)){

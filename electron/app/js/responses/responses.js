@@ -5,7 +5,7 @@ module.exports = {
 
 	intentName: {
 		localFolder: 'xxx' <- Local folder in app/media/responses/ where you are storing local media responses
-		queryTerms: ['a','b','c'] <- what terms to use to query media from sources like giphy.com
+		queryTerms: ['a','b','c'] <- what terms to use to query media from online sources like giphy.com
 		servo: 'ccc' <- name of servo animation stored in app/media/servo_anims/ (without the .json)
 		led: {
 			anim: 'eee' <- name of animation, must be a function in app/js/senses/leds.js 
@@ -16,7 +16,7 @@ module.exports = {
 	}
 	*/
 
-	
+
 	confused: {
 		localFolder: 'confused',
 		queryTerms: ['shrug', 'confused', 'dont know'],

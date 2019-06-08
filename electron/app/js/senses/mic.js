@@ -5,7 +5,7 @@ const os = require('os')
 
 class Mic {
 	constructor(){
-		this.recorder = (os.arch()=='arm')?'arecord':'rec' // use arecord on pi, rec on laptop
+		this.recorder = (os.arch()=='arm')?'arecord':'rec' // use arecord on pi, rec on os/linux
 
 		this.recorderOpts={
 			verbose: false,

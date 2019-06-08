@@ -1,4 +1,5 @@
 const config = require('config/config.js')
+const path = require('path')
 
 async function findOnline(query){
 
@@ -29,8 +30,71 @@ async function findOnline(query){
 	return item.media.mp4.url
 }
 
+async function findMediaType(filepath){
 
-async function findDuration(path){
+	if(!filepath){
+		return null
+	}
+
+	let imgFiles = [".png", ".jpg", ".jpeg"]
+	let videoFiles = [".mp4"]
+	let gifFiles = [".gif", ".webp"]
+
+	if(imgFiles.includes(path.extname(filepath).toLowerCase())){
+		return "img"
+	}
+
+	if(videoFiles.includes(path.extname(filepath).toLowerCase())){
+		return "video"
+	}
+
+	if(gifFiles.includes(path.extname(filepath).toLowerCase())){
+		return "gif"
+	}
+}
+
+async function findMediaDuration(path){
+	if(!path){
+		return null
+	}
+
+	let type = await findMediaType(path)
+
+	let duration = 0
+
+	if(type == 'video'){
+
+		duration = await findVideoDuration(path)
+		
+
+	} else if(type == 'img'){
+		console.log('image')
+
+		duration = await findGifDuration(path)
+
+	} else if(type == 'gif'){
+		
+		duration = await findGifDuration(path)
+		
+	}
+
+	return duration
+}
+
+async function findGifDuration(path){
+
+	let gif = document.getElementById("gif")
+	gif.src = path
+	return 3000
+	// need to implement method to find duration of gif
+}
+
+
+async function findVideoDuration(path){
+
+	if(!path){
+		return null
+	}
 
 	let endPauseDuration = 1200
 	let video = document.getElementById("video")
@@ -58,5 +122,7 @@ function play(){
 
 module.exports = {
 	findOnline,
-	findDuration
+	findMediaType,
+	findVideoDuration,
+	findMediaDuration
 }

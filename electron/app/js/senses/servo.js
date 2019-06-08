@@ -47,6 +47,9 @@ class Servo {
 	}
 
 	animate(animName){
+
+		console.log(`SERVO > ${animName}.json`)
+		
 		let filepath = path.join(process.cwd(),'app','media','servo_anims',`${animName}.json`)
 
 		fs.readFile(filepath, 'utf8', (err, contents) => {

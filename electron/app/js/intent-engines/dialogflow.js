@@ -55,7 +55,7 @@ class DialogflowSpeech {
 		this.stream = client.streamingDetectIntent()
 		this.result = ''
 		this.unpipeTimer = null
-		this.listenFor = 5000
+		this.listenFor = 4000
 		this.intentObj = {}
 		this.sttStream = null
 		// this.wakewordDetector = wakewordDetector
@@ -83,9 +83,9 @@ class DialogflowSpeech {
 
 			self.unpipeTimer = setTimeout(()=>{
 				console.log('UNPIPING DIALOGFLOW > QUERY TIME EXCEEDED')
-				self.unpipeTimer = null
 				self.sttStream.unpipe(self.stream)
 				mic.getMic().unpipe(self.sttStream)
+				self.unpipeTimer = null
 			}, self.listenFor)
 		})
 
@@ -137,6 +137,7 @@ class DialogflowSpeech {
 				console.log("DIALOGFLOW > SENDING RESULT")
 				event.emit('final-command', self.result)
 			} else {
+				console.log("DIALOGFLOW > NO RESULT/NTN HEARD")
 				event.emit('no-command')
 			}	
 
