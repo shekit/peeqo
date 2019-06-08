@@ -61,7 +61,8 @@ const Camera = require('js/senses/camera')
 const camera = new Camera()
 
 // initiate servos
-const servo = require('js/senses/servo')
+const Servo = require('js/senses/servo')
+const servo = new Servo()
 
 // initiate text
 const text = require('js/senses/text')

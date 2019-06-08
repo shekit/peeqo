@@ -83,11 +83,12 @@ class Servo {
 	}
 
 	servoPlayback(animData){
-		let index = 0
+		var index = 0
 
 		this.servoTimer = setInterval(() => {
 			for(var i=0;i<3;i++){
 				this.pwm.setPulseLength(i, animData[index][i])
+				//console.log(i,animData[index][i])
 			}
 
 			index ++
@@ -103,7 +104,5 @@ class Servo {
 }
 
 //make singleton
-const servo = new Servo()
-Object.freeze(servo)
 
-module.exports = servo
+module.exports = Servo
