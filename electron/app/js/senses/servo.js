@@ -38,7 +38,7 @@ class Servo {
 				if(err) console.error(`Error initializing PCA9685 for servos`);
 
 				for(var i=0;i<3;i++){
-					pwm.setPulseLength(i, this.servoRestAngle)
+					this.pwm.setPulseLength(i, this.servoRestAngle)
 				}
 			})
 
