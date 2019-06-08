@@ -1,8 +1,8 @@
 const event = require('js/events/events')
-const responses = require('js/responses/responses')
 const common = require('js/helpers/common')
-const gif = require('js/helpers/gifs')
-const video = require('js/helpers/videos')
+const media = require('js/helpers/media')
+const responses = require('js/responses/responses')
+
 
 async function setAnswer(ans=null, overrides={}){
 
@@ -19,38 +19,57 @@ async function setAnswer(ans=null, overrides={}){
 	let r = null
 
 	if(ans.type == 'remote'){
-		r = await gif.findOnline(q)
+		r = await media.findRemoteGif(q)
 		console.log(`MEDIA URL > ${r}`)
 	} else {
 		// local response
 		r = q
 	}
 
-	let mediaType = await video.findMediaType(r)
-	let d = await video.findMediaDuration(r)
+	let mediaType = await media.findMediaType(r)
+	let d = await media.findMediaDuration(r)
 
 	console.log(`MEDIA DURATION > ${d}`)
 
-	if(Object.keys(ans.led).length != 0){
+	if(ans.hasOwnProperty('led') && Object.keys(ans.led).length != 0){
 		// run led animation
 		event.emit('led-on', {anim: ans.led.anim , color: ans.led.color })
 	}
 
-	if(ans.sound !== null){
+	if(ans.hasOwnProperty('sound') && ans.sound !== null){
 		event.emit('play-sound', ans.sound)
 	}
 
-	if(ans.servo !== null){
+	if(ans.hasOwnProperty('servo') && ans.servo !== null){
 		// move servo
 		event.emit('servo-move', ans.servo)
 	}
 
-	let o = await common.setTimer(d, mediaType)
+	if(ans.hasOwnProperty('cbBefore')){
+		ans.cbBefore()
+	}
+
+	let showMedia = common.transitionToMedia(d, mediaType)
+
+	if(ans.hasOwnProperty('text') && ans.text){
+		text.showText(ans.text)
+	}
+
+	if(ans.hasOwnProperty('cbDuring')){
+		ans.cbDuring()
+	}
+
+	let o = await common.transitionFromMedia(d)
+
+	if(ans.hasOwnProperty('text')){
+		text.removeText()
+	}
+
 	console.log(`RESPONSE > END`)
 
 	// callback
-	if(ans.hasOwnProperty('cb')){
-		ans.cb()
+	if(ans.hasOwnProperty('cbAfter')){
+		ans.cbAfter()
 	}
 }
 
@@ -58,21 +77,8 @@ function wakeword(){
 	setAnswer(responses.wakeword, {type:'wakeword'})
 }
 
-function parseIntent(cmd){
-	
-	if(!responses.hasOwnProperty(cmd.intent)){
-		// a response for this particular intent does not exist
-		console.error(`A local response for "${cmd.queryText}" doesn't exist`)
-		setAnswer(responses.confused, {type:'local'})
-		return
-	}
-
-	console.log(cmd)
-
-	setAnswer(responses[cmd.intent], {type:'remote'})
-}
 
 module.exports = {
 	wakeword,
-	parseIntent
+	setAnswer
 }

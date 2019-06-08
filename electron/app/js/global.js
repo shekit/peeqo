@@ -57,6 +57,9 @@ event.emit('led-on', {anim: 'circle', color: 'aqua'})
 // initiate camera
 const camera = require('js/senses/camera')
 
+// initiate text
+const text = require('js/senses/text')
+
 // set audio volume level. 0 - mute; 1-max
 event.emit('set-volume',0.4)
 

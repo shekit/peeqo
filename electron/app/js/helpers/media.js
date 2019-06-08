@@ -1,7 +1,29 @@
 const config = require('config/config.js')
+const giphy = require('giphy-api')(config.giphy.key);
 const path = require('path')
 
-async function findOnline(query){
+
+function findRemoteGif(query){
+	if(!query){
+		return null
+	}
+
+	return new Promise((resolve, reject)=>{
+		giphy.translate(query, (err,res)=>{
+
+			if(err || !res) reject(`Got error or no response when searching for "${query}" from Giphy`);
+
+			//console.log(res.data.images)
+
+			const gif = res.data.images.original_mp4.mp4
+
+			resolve(gif)
+
+		})
+	})	
+}
+
+async function findRemoteVideo(query){
 
 	query = encodeURI(query)
 	// let json = null
@@ -116,13 +138,9 @@ async function findVideoDuration(path){
 }
 
 
-function play(){
-
-}
-
 module.exports = {
-	findOnline,
+	findRemoteGif,
+	findRemoteVideo,
 	findMediaType,
-	findVideoDuration,
 	findMediaDuration
 }

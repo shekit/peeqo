@@ -12,7 +12,9 @@ module.exports = {
 			color: 'red' <- color leds, must be defined in app/js/senses/leds.js
 		}
 		sound: 'cccc.wav/mp3' <- mp3 or wav file located in app/media/sounds/
-		cb: function <- callback function to be called at end of response
+		cbBefore: function <- callback function before media playback
+		cbDuring: function <- callback function during media playback
+		cbAfter: function <- callback function after media playback
 	}
 	*/
 
@@ -48,7 +50,7 @@ module.exports = {
 			color: 'aqua'
 		},
 		sound: 'alert.wav',
-		cb: function(){
+		cbAfter: function(){
 			event.emit('speech-to-text')
 		}
 	}

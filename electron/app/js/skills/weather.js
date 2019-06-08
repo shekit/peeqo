@@ -1,4 +1,6 @@
 const config = require('config/config')
+const actions = require('js/actions/actions')
+const speak = require('js/senses/speak')
 
 function getWeather(city){
 
@@ -25,7 +27,13 @@ function getWeather(city){
 }
 
 function displayWeather(data){
-	console.log(`The temperature in ${data.name} is ${data.main.temp} degrees with ${data.weather[0].description}`)
+
+	let cbDuring = () => {
+		speak.speak(`The temperature in ${data.name} is ${data.main.temp} degrees with ${data.weather[0].description}`)
+	}
+
+	actions.setAnswer({type:'remote', queryTerms: [data.weather[0].description], cbDuring: cbDuring, text: `${data.main.temp} \n ${data.weather[0].description}`})
+	//console.log(`The temperature in ${data.name} is ${data.main.temp} degrees with ${data.weather[0].description}`)
 }
 
 module.exports = {

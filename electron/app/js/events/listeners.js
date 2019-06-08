@@ -4,6 +4,7 @@ const common = require('js/helpers/common')
 const power = require('js/power/power')
 const speak = require('js/senses/speak')
 const dialogflow = require('js/intent-engines/dialogflow')
+const dialogflowIntents = require('js/intent-engines/dialogflow-intents')
 const mic = require('js/senses/mic')
 
 module.exports = () => {
@@ -11,7 +12,7 @@ module.exports = () => {
 	event.on('wakeword', action.wakeword)
 
 	// passes on response object from STT engine
-	event.on('final-command', action.parseIntent)
+	event.on('final-command', dialogflowIntents.parseIntent)
 
 	event.on('no-command', () => {
 		event.emit("led-on", {anim:'fadeOutError',color:'red'})
@@ -23,10 +24,8 @@ module.exports = () => {
 		
 		if(process.env.OS == "unsupported"){
 			document.getElementById("wakeword").style.backgroundColor = ""
-			//mic.startMic()
-		} else {
-			//event.emit('pipe-to-wakeword')
-		}
+		} 
+
 		event.emit('pipe-to-wakeword')
 		
 	})

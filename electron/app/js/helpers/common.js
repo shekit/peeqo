@@ -134,7 +134,7 @@ function pickRandom(array){
   	return array[randomNumber];
 }
 
-async function transitionBack(ms){
+async function transitionFromMedia(ms){
 	return new Promise((resolve) => {
 		let wait = setTimeout(()=>{
 			clearTimeout(wait)
@@ -144,6 +144,29 @@ async function transitionBack(ms){
 		}, ms)
 	})
 }
+
+function transitionToMedia(duration, type){
+	if(!duration){
+		return null
+	}
+
+	duration = parseInt(duration)
+	let loop = 1
+
+	let afterTransition = () => {
+		if(type == 'video'){
+			let video = document.getElementById("video")
+			event.emit('show-div','videoWrapper')
+			video.play()
+		} else if(type == 'gif' || type == 'img'){
+			let img = document.getElementById("gif")
+			event.emit('show-div', 'gifWrapper')
+		}
+	}
+
+	event.emit('transition-eyes-away', afterTransition)
+}
+
 
 async function setTimer(duration, type){
 
@@ -167,7 +190,7 @@ async function setTimer(duration, type){
 
 	event.emit('transition-eyes-away', afterTransition)
 
-	let done = await transitionBack(duration*loop)
+	let done = await transitionFromMedia(duration*loop)
 
 	return done
 }
@@ -177,5 +200,7 @@ module.exports = {
 	pickFile,
 	setQuery,
 	setTimer,
+	transitionToMedia,
+	transitionFromMedia,
 	findLocalMediaType
 }

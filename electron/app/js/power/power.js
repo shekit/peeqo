@@ -15,6 +15,10 @@ function reboot() {
 	}, 1000)
 }
 
+function refresh(){
+	location.reload()
+}
+
 module.exports = {
 	shutdown,
 	reboot
