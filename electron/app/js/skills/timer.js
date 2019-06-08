@@ -1,10 +1,22 @@
 const event = require('js/events/events')
+const actions = require('js/actions/actions')
+const responses = require('js/responses/responses')
 
 class Timer {
-	constructor(time){
-		//@params time {object} - {hrs:int, mins: int, secs:int}
+	constructor(time, units){
+		
 		this.time = time
+		this.unit = units
 		this.timer = null
+		this.multiplier = 1000
+
+		if(this.unit == "hour" || this.unit == "hours"){
+			this.multiplier *= 3600
+		} else if(this.unit == "minute" || this.unit == "minutes"){
+			this.multiplier *= 60
+		}
+
+		this.time = this.time * this.multiplier
 
 		this.clearTimer = this.clearTimer.bind(this)
 
@@ -13,16 +25,13 @@ class Timer {
 
 	startTimer(){
 
-		let time = 0 
-
-		time += this.time.hrs*60*60*1000
-		time += this.time.mins*60*1000
-		time += this.time.secs*1000
+		actions.setAnswer(responses.ok, {type: 'local'})
 
 		this.timer = setTimeout(()=>{
+			actions.setAnswer(responses.alarm, {type: 'local'})
 			console.log("timer over")
 			this.timer = null
-		}, time)
+		}, this.time)
 	}
 
 	clearTimer(){

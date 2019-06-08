@@ -33,12 +33,23 @@ module.exports = {
 	greeting: {
 		localFolder: 'greeting',
 		queryTerms: ['hello','hi','howdy','sup','whatsup'],
-		servo: 'look-up-inverted',
+		servo: 'look-up',
 		led: {
 			anim: 'blink',
 			color: 'green'
 		},
 		sound: null
+	},
+
+	bye: {
+		localFolder: "bye",
+		queryTerms:["bye","see you","goodbye","ciao","so long"],
+		servo: "look-up-slow",
+		led: {
+			anim: "zoom",
+			color: "blue"
+		},
+		sound:null
 	},
 
 	wakeword: {
@@ -53,5 +64,27 @@ module.exports = {
 		cbAfter: function(){
 			event.emit('speech-to-text')
 		}
-	}
+	},
+
+	ok: {
+		localFolder: 'ok',
+		queryTerms:["ok","okay","you got it"],
+		servo: "look-up",
+		led: {
+			anim: "blink",
+			color: "green"
+		},
+		sound: null
+	},
+
+	alarm: {
+		localFolder: "alarm",
+		queryTerms:["alarm","ringing","party"],
+		servo: "jiggle",
+		led: {
+			anim: "blink",
+			color: "yellow"
+		},
+		sound:null
+	},
 }

@@ -1,6 +1,6 @@
 const actions = require('js/actions/actions')
 const weather = require('js/skills/weather')
-const timer = require('js/skills/timer')
+const Timer = require('js/skills/timer')
 const event = require('js/events/events')
 const responses = require('js/responses/responses')
 
@@ -15,7 +15,7 @@ function parseIntent(cmd){
 	switch(cmd.intent){
 
 		case "greeting":
-			actions.setAnswer(responses["greeting"], {type: 'remote'})
+			actions.setAnswer(responses.greeting, {type: 'remote'})
 			break
 
 		case "camera":
@@ -23,7 +23,8 @@ function parseIntent(cmd){
 			break
 
 		case "timer":
-			timer.startTimer(cmd.params.time.numberValue, cmd.params.timeUnit.stringValue)
+			let timer = new Timer(cmd.params.time.numberValue, cmd.params.timeUnit.stringValue)
+			timer.startTimer()
 			break
 
 		case "weather":
@@ -35,7 +36,7 @@ function parseIntent(cmd){
 			break
 
 		case "goodbye":
-			actions.setAnswer(responses["goodbye"], {type: 'remote'})
+			actions.setAnswer(responses.bye, {type: 'remote'})
 			break
 		default:
 			actions.setAnswer(responses.confused, {type:'remote'})
