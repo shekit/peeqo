@@ -39,7 +39,7 @@ function parseIntent(cmd){
 			actions.setAnswer(responses.bye, {type: 'remote'})
 			break
 		default:
-			actions.setAnswer(responses.confused, {type:'remote'})
+			actions.setAnswer(responses.confused, {type:'local'})
 			break
 	}
 
