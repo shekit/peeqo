@@ -5,6 +5,7 @@ const event = require('js/events/events')
 
 let i2cBus = null
 let PCA9685 = null
+let options = null
 
 if(os.arch() == 'arm'){
 	//only setup on pi
@@ -13,7 +14,7 @@ if(os.arch() == 'arm'){
 
 	PCA9685 = require('pca9685').Pca9685Driver
 
-	const options = {
+	options = {
 		i2c: i2cBus.openSync(1),
 		address: 0x40,
 		frequency: 50,
