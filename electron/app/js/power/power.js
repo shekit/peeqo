@@ -21,5 +21,6 @@ function refresh(){
 
 module.exports = {
 	shutdown,
-	reboot
+	reboot,
+	refresh
 }

@@ -39,6 +39,8 @@ module.exports = () => {
 
 	event.on('reboot', power.reboot)
 
+	event.on('refresh', power.refresh)
+
 
 	// AUDIO PLAYBACK
 	event.on('play-sound', speak.playSound)
@@ -55,9 +57,11 @@ module.exports = () => {
 
 	event.on('btn-16-short-press',()=>{
 		console.log('btn 16 short press')
+		power.refresh()
 	})
 	event.on('btn-16-long-press',()=>{
 		console.log('btn 16 long press')
+		power.shutdown()
 	})
 
 	event.on('btn-17-short-press',()=>{
