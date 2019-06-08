@@ -63,7 +63,7 @@ class Servo {
 
 			try {
 				const data = JSON.parse(contents)
-				servoPlayback(animData)
+				this.servoPlayback(data)
 
 			} catch(error){
 				console.error(`Error playing servo from anim file`)
