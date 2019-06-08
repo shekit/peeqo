@@ -31,7 +31,7 @@ class Servo {
 		this.servoRestAngle = 1500
 
 		this.animate = this.animate.bind(this)
-		this.reset = this.animate.bind(this)
+		this.reset = this.reset.bind(this)
 
 		if(PCA9685 != null){
 			this.pwm = new PCA9685(options, (err) => {
