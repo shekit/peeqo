@@ -198,7 +198,7 @@ class Leds {
 			return
 		}
 
-		this.strip.all(...colors[color], brightness)
+		this.strip.all(...this.colors[color], brightness)
 		this.strip.sync()
 	}
 
