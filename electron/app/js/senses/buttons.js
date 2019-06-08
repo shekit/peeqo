@@ -22,12 +22,13 @@ function initializeButtons(){
 	}
 
 	const longPressDuration = 3000
+	let btnTimer = null
+	let longPressEventSent = false
+	let pressed = false
 
 	gpio.on('change', (channel, value) => {
 
-		var btnTimer = null
-		var longPressEventSent = false
-		var pressed = false
+		
 
 		
 		if(value == false){
@@ -43,15 +44,16 @@ function initializeButtons(){
 			
 		} else if(value == true){
 			console.log(`Btn ${channel} pressed`)
-			pressed = true
-
-			if(pressed){
+			
+			if(!pressed){
 				btnTimer = setTimeout(()=>{
 					event.emit(`btn-${channel}-long-press`)
 					longPressEventSent = true
 					btnTimer = null
 				}, longPressDuration)
 			}
+
+			pressed = true
 			
 		}
 	})
