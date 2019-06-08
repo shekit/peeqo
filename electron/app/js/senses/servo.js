@@ -103,6 +103,4 @@ class Servo {
 	}
 }
 
-//make singleton
-
 module.exports = Servo

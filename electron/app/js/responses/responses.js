@@ -46,7 +46,7 @@ module.exports = {
 		queryTerms:["bye","see you","goodbye","ciao","so long"],
 		servo: "look-up-slow",
 		led: {
-			anim: "zoom",
+			anim: "blink",
 			color: "blue"
 		},
 		sound:null
