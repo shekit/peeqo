@@ -13,6 +13,10 @@ async function setAnswer(ans=null, overrides={}){
 	// merge overriden values and new values
 	Object.assign(ans, overrides)
 
+	if(ans.hasOwnProperty('sound') && ans.sound !== null){
+		event.emit('play-sound', ans.sound)
+	}
+
 	let q = await common.setQuery(ans)
 	console.log(`LOCAL FILE OR SEARCH QUERY > ${q}`)
 
@@ -34,10 +38,6 @@ async function setAnswer(ans=null, overrides={}){
 	if(ans.hasOwnProperty('led') && Object.keys(ans.led).length != 0){
 		// run led animation
 		event.emit('led-on', {anim: ans.led.anim , color: ans.led.color })
-	}
-
-	if(ans.hasOwnProperty('sound') && ans.sound !== null){
-		event.emit('play-sound', ans.sound)
 	}
 
 	if(ans.hasOwnProperty('servo') && ans.servo !== null){
