@@ -13,6 +13,7 @@ if(process.env.OS !== 'unsupported'){
 }
 
 const Eyes = require('js/face/eyes')
+const Glasses = require('js/face/glasses')
 const speak = require('js/senses/speak')
 const buttons = require('js/senses/buttons')
 const weather = require('js/skills/weather')
@@ -37,10 +38,11 @@ document.addEventListener("keydown", (e)=>{
 	}
 })
 
-// initiate eyes
+// initiate eyes and glasses
 const eyes = new Eyes()
 event.emit('show-div', 'eyeWrapper')
 event.emit('start-blinking')
+const glasses = new Glasses()
 
 
 setTimeout(()=>{
