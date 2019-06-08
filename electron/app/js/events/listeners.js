@@ -57,21 +57,21 @@ module.exports = () => {
 		console.log('btn 16 short press')
 	})
 	event.on('btn-16-long-press',()=>{
-		console.log('btn 16 short press')
+		console.log('btn 16 long press')
 	})
 
 	event.on('btn-17-short-press',()=>{
 		console.log('btn 17 short press')
 	})
 	event.on('btn-17-long-press',()=>{
-		console.log('btn 17 short press')
+		console.log('btn 17 long press')
 	})
 
 	event.on('btn-23-short-press',()=>{
 		console.log('btn 23 short press')
 	})
 	event.on('btn-23-long-press',()=>{
-		console.log('btn 23 short press')
+		console.log('btn 23 long press')
 	})
 
 }

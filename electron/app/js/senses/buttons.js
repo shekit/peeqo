@@ -30,21 +30,21 @@ function initializeButtons(){
 		let pressed = false
 
 		
-		if(value === false){
-			console.log(`Btn ${channel} momentary press`)
+		if(value == false){
+			console.log(`Btn ${channel} released`)
 			clearTimeout(btnTimer)
 			btnTimer = null
 			pressed = false
 
-			if(!longPressEventSent){
+			// if(!longPressEventSent){
 				event.emit(`btn-${channel}-short-press`)
-			}
+			// }
 			
 		} else if(value === true){
 			if(!pressed){
 				btnTimer = setTimeout(()=>{
 					event.emit(`btn-${channel}-long-press`)
-					longPressEventSent = true
+					// longPressEventSent = true
 					btnTimer = null
 				}, longPressDuration)
 			}
