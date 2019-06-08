@@ -60,6 +60,9 @@ event.emit('led-on', {anim: 'circle', color: 'aqua'})
 const Camera = require('js/senses/camera')
 const camera = new Camera()
 
+// initiate servos
+const servo = require('js/senses/servo')
+
 // initiate text
 const text = require('js/senses/text')
 
