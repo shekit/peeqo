@@ -57,7 +57,8 @@ const leds = require('js/senses/leds')
 event.emit('led-on', {anim: 'circle', color: 'aqua'})
 
 // initiate camera
-const camera = require('js/senses/camera')
+const Camera = require('js/senses/camera')
+const camera = new Camera()
 
 // initiate text
 const text = require('js/senses/text')

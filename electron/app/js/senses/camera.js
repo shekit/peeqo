@@ -11,6 +11,7 @@ class Camera{
 		this.client.invoke("hello", (err, res, more) => {
 			if(res){
 				console.log(`Connected to camera: ${res}`)
+				this.connected = true
 			} else {
 				console.log('Not connected to camera')
 			}
@@ -53,8 +54,4 @@ class Camera{
 	}
 }
 
-// make singleton
-const camera = new Camera()
-Object.freeze(camera)
-
-module.exports = camera
+module.exports = Camera
