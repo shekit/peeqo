@@ -25,9 +25,9 @@ function initializeButtons(){
 
 	gpio.on('change', (channel, value) => {
 
-		let btnTimer = null
-		let longPressEventSent = false
-		let pressed = false
+		var btnTimer = null
+		var longPressEventSent = false
+		var pressed = false
 
 		
 		if(value == false){
