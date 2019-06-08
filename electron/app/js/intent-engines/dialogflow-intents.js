@@ -36,7 +36,7 @@ function parseIntent(cmd){
 			break
 
 		case "goodbye":
-			actions.setAnswer(responses.bye, {type: 'remote'})
+			actions.setAnswer(responses.bye, {type: 'local'})
 			break
 		default:
 			actions.setAnswer(responses.confused, {type:'local'})
