@@ -15,7 +15,7 @@ anim_file = process.argv[2]
 
 //var variant = process.argv[3]
 
-var anim = JSON.parse(fs.readFileSync(path.join(process.cwd(),'js','commands','anims', `${anim_file}.json` )), 'utf8')
+var anim = JSON.parse(fs.readFileSync(path.join(process.cwd(),'anims', `${anim_file}.json` )), 'utf8')
 
 var new_array =[]
 
@@ -65,5 +65,5 @@ for (var i=0; i<anim.length; i++){
 	new_array.push(lil_array)
 }
 
-fs.writeFileSync(path.join(process.cwd(),'js','commands','anims', `${anim_file}-inverted.json`), JSON.stringify(new_array))
+fs.writeFileSync(path.join(process.cwd(),'corrected-anims', `${anim_file}.json`), JSON.stringify(new_array))
 //console.log(new_array)

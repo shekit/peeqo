@@ -15,6 +15,7 @@ module.exports = {
 		cbBefore: function <- callback function before media playback
 		cbDuring: function <- callback function during media playback
 		cbAfter: function <- callback function after media playback
+		text: 'string' <- what text should be overlayed on the screen
 	}
 	*/
 
