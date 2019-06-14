@@ -17,7 +17,8 @@ function getWeather(city){
 		.then((response)=> response.json())
 		.then((json)=>{
 			console.log(json)
-			if(json.cod == '404'){
+			if(json.code == '404') {
+                speak.speak(`Sorry, I could not find the city: ${query}`)
 				console.error(`Cant find city ${query}`)
 				return
 			}

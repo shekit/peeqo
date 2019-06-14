@@ -79,6 +79,12 @@ if(process.env.OS == 'unsupported'){
 		document.getElementById("wakeword").style.backgroundColor = "red"
 		event.emit('wakeword')
 	})
+
+    document.getElementById("hue").addEventListener('click', (e) => {
+        e.preventDefault()
+        document.getElementById("hue").style.backgroundColor = "red"
+        event.emit('hue')
+    })
 } else {
 	listen.startListening()
 	document.getElementById("wakeword").style.display = "none"

@@ -1,5 +1,6 @@
 const actions = require('js/actions/actions')
 const weather = require('js/skills/weather')
+const PeeqoHue = require('js/skills/hue')
 const Timer = require('js/skills/timer')
 const event = require('js/events/events')
 const responses = require('js/responses/responses')
@@ -47,6 +48,13 @@ function parseIntent(cmd){
 
             actions.setAnswer(responses.cat, {type: 'remote', cbDuring: callbackDuringResponse})
             break
+
+        case "hue":
+            let hue = new PeeqoHue()
+			hue.discoverNearbyBridges()
+			hue.changeGroupState(cmd.params.hue.groupName, {state: cmd.params.hue.state})
+            break
+
 		default:
 			actions.setAnswer(responses.confused, {type:'local'})
 			break

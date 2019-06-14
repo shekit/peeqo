@@ -7,9 +7,15 @@ const dialogflow = require('js/intent-engines/dialogflow')
 const dialogflowIntents = require('js/intent-engines/dialogflow-intents')
 const mic = require('js/senses/mic')
 
+function forceHue() {
+    dialogflowIntents.parseIntent({intent: 'hue', params: {hue: {groupName: 'Kitchen', state: 'off'}}})
+}
+
 module.exports = () => {
 
 	event.on('wakeword', action.wakeword)
+
+	event.on('hue', forceHue)
 
 	// passes on response object from STT engine
 	event.on('final-command', dialogflowIntents.parseIntent)

@@ -69,3 +69,8 @@ html, body, div {
 	position: absolute;
 	z-index: 100;
 }
+
+#hue{
+	position: absolute;
+	z-index: 100;
+}
