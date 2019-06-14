@@ -10,6 +10,7 @@ function parseIntent(cmd){
 
 	// this one is for google dialogflow, you might need to make adjustments for a different engine	
 
+	console.log('cmd')
 	console.log(cmd)
 
 	switch(cmd.intent){
@@ -38,6 +39,14 @@ function parseIntent(cmd){
 		case "goodbye":
 			actions.setAnswer(responses.bye, {type: 'local'})
 			break
+
+        case "cat":
+            let callbackDuringResponse = () => {
+                speak.speak(`${cmd.responseText}`)
+            }
+
+            actions.setAnswer(responses.cat, {type: 'remote', cbDuring: callbackDuringResponse})
+            break
 		default:
 			actions.setAnswer(responses.confused, {type:'local'})
 			break

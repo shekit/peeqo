@@ -33,7 +33,7 @@ function displayWeather(data){
 	}
 
 	actions.setAnswer({type:'remote', queryTerms: [data.weather[0].description], cbDuring: cbDuring, text: `${data.main.temp} \n ${data.weather[0].description}`})
-	//console.log(`The temperature in ${data.name} is ${data.main.temp} degrees with ${data.weather[0].description}`)
+	console.log(`The temperature in ${data.name} is ${data.main.temp} degrees with ${data.weather[0].description}`)
 }
 
 module.exports = {

@@ -88,4 +88,15 @@ module.exports = {
 		},
 		sound:null
 	},
+
+    cat: {
+        localFolder: 'null',
+        queryTerms: ['cute cat', 'funny cat', 'funny kitten', 'cute kitten'],
+        servo: 'jiggle',
+        led: {
+            anim: 'blink',
+            color: 'green'
+        },
+        sound: null
+    },
 }

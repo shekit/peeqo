@@ -55,7 +55,7 @@ class DialogflowSpeech {
 		this.stream = client.streamingDetectIntent()
 		this.result = ''
 		this.unpipeTimer = null
-		this.listenFor = 4000
+		this.listenFor = 10000
 		this.intentObj = {}
 		this.sttStream = null
 		// this.wakewordDetector = wakewordDetector
@@ -90,6 +90,8 @@ class DialogflowSpeech {
 		})
 
 		this.stream.on('data', (data) => {
+			console.log('data')
+			console.log(data)
 			if(data.queryResult != null){
 				
 				if(data.queryResult.queryText == ""){
