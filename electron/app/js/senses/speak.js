@@ -48,7 +48,7 @@ function stopSound(){
 	audio.src = ''
 }
 
-function setVolume(vol){
+function setVolume(vol) {
 	// sets volume level for audio and video playback
 	// @param {float} vol - range 0-1
 

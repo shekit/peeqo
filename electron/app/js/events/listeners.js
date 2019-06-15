@@ -11,6 +11,9 @@ function forceHue() {
     dialogflowIntents.parseIntent({intent: 'hue', params: {hue: {groupName: 'Kitchen', state: 'off'}}})
 }
 
+// TODO: Add debug buttons to display for the top 4 buttons on peeqo
+// TODO: Setup utility for handling button triggers and how to pass to "actions" or so on
+
 module.exports = () => {
 
 	event.on('wakeword', action.wakeword)
