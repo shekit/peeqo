@@ -64,6 +64,7 @@ module.exports = {
 		sound: 'alert.wav',
 		cbAfter: function(){
 			event.emit('speech-to-text')
+            speak.setVolume(0.4)
 		}
 	},
 
