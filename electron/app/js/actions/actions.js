@@ -74,10 +74,11 @@ async function setAnswer(ans=null, overrides={}){
 }
 
 function wakeword(){
-	speak.setVolume(0.1)
-	setAnswer(responses.wakeword, {type:'wakeword'}).then(a => {
-		speak.setVolume(0.4)
-	})
+	setAnswer(responses.wakeword, {type:'wakeword', cbBefore: function(){
+			speak.setVolume(0.1)
+	}, cbAfter: function(){
+            speak.setVolume(0.4)
+	}})
 }
 
 

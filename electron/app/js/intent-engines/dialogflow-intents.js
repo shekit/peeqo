@@ -44,6 +44,7 @@ function parseIntent(cmd){
         case "cat":
             let callbackDuringResponse = () => {
                 speak.speak(`${cmd.responseText}`)
+				console.log(`responseText: ${cmd.responseText}`)
             }
 
             actions.setAnswer(responses.cat, {type: 'remote', cbDuring: callbackDuringResponse})
