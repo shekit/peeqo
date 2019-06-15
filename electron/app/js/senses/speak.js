@@ -24,7 +24,7 @@ function speak(text){
 	})
 }
 
-function playSound(filename){
+function playSound(filename, vol){
 	// plays passed in file located in app/media/sounds
 	// @param {string} filename - accepts .wav & .mp3 files located in app/media/sounds
 	console.log(`FILE: ${filename}`)
@@ -33,6 +33,8 @@ function playSound(filename){
 		console.error(`File ${filename} is not supported`)
 		return
 	}
+
+	setVolume(vol)
 	let audio = document.getElementById("sound")
 	audio.currentTime = 0
 	audio.src = path.join(process.cwd(),'app','media','sounds',filename)

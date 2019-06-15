@@ -16,6 +16,7 @@ module.exports = {
 		cbDuring: function <- callback function during media playback
 		cbAfter: function <- callback function after media playback
 		text: 'string' <- what text should be overlayed on the screen
+		volume: volume the sound is played at (decimal between 0 and 1, default 0.5)
 	}
 	*/
 
@@ -28,7 +29,8 @@ module.exports = {
 			anim: 'blink',
 			color: 'orange'
 		},
-		sound: null
+		sound: null,
+		volume: 0.5
 	},
 
 	greeting: {
@@ -39,7 +41,8 @@ module.exports = {
 			anim: 'blink',
 			color: 'green'
 		},
-		sound: null
+		sound: null,
+        volume: 0.5
 	},
 
 	bye: {
@@ -50,7 +53,8 @@ module.exports = {
 			anim: "blink",
 			color: "blue"
 		},
-		sound:null
+		sound:null,
+        volume: 0.5
 	},
 
 	wakeword: {
@@ -62,9 +66,9 @@ module.exports = {
 			color: 'aqua'
 		},
 		sound: 'alert.wav',
+    	volume: 0.1,
 		cbAfter: function(){
 			event.emit('speech-to-text')
-            speak.setVolume(0.4)
 		}
 	},
 
@@ -76,7 +80,8 @@ module.exports = {
 			anim: "blink",
 			color: "green"
 		},
-		sound: null
+		sound: null,
+        volume: 0.5
 	},
 
 	alarm: {
@@ -87,7 +92,8 @@ module.exports = {
 			anim: "blink",
 			color: "yellow"
 		},
-		sound:null
+		sound:null,
+        volume: 0.5
 	},
 
     cat: {
@@ -98,6 +104,7 @@ module.exports = {
             anim: 'blink',
             color: 'green'
         },
-        sound: null
+        sound: null,
+        volume: 0.5
     },
 }

@@ -13,8 +13,13 @@ async function setAnswer(ans=null, overrides={}){
 	// merge overriden values and new values
 	Object.assign(ans, overrides)
 
-	if(ans.hasOwnProperty('sound') && ans.sound !== null){
-		event.emit('play-sound', ans.sound)
+	if(ans.hasOwnProperty('sound') && ans.sound !== null) {
+		if(ans.hasOwnProperty('volume') && ans.volume != null) {
+            event.emit('play-sound', ans.sound, ans.volume)
+		}
+		else {
+            event.emit('play-sound', ans.sound, 0.5)
+		}
 	}
 
 	let q = await common.setQuery(ans)
