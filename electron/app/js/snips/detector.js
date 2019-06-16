@@ -1,17 +1,16 @@
 'use strict'
 
 const mqtt = require('mqtt');
-const event = require('js/events/events')
-
+const event = require('js/events/events');
+const config = require('config/config');
 
 class SnipsDetector {
     constructor() {
-        this.hostname = "mqtt://localhost";
     }
 
     start() {
         var self = this;
-        this.client = mqtt.connect(this.hostname);
+        this.client = mqtt.connect(config.snips.mqtt.hostname);
         this.client.on('connect', this.onConnect);
 
         this.client.on('message', function (topic, message) {
@@ -29,8 +28,8 @@ class SnipsDetector {
 
     onConnect() {
         console.log(this);
-        console.log("[Snips Log] Connected to MQTT broker " + this.hostname);
-        this.client.subscribe('hermes/#');
+        console.log("[Snips Log] Connected to MQTT broker " + config.snips.mqtt.hostname);
+        this.subscribe('hermes/#');
     }
 
     onIntentDetected(intent) {
