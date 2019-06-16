@@ -30,12 +30,12 @@ class SnipsDetector {
         console.log(this);
         console.log("[Snips Log] Connected to MQTT broker " + config.snips.mqtt.hostname);
         this.subscribe('hermes/#');
-        events.emit('snips-onConnect');
+        event.emit('snips-onConnect');
     }
 
     onIntentDetected(intent) {
         console.log("[Snips Log] Intent detected: " + JSON.stringify(intent));
-        events.emit('snips-finalCommand', intent);
+        event.emit('snips-finalCommand', intent);
     }
 
     onHotwordDetected() {
@@ -45,7 +45,7 @@ class SnipsDetector {
 
     onListeningStateChanged(listening) {
         console.log("[Snips Log] " + (listening ? "Start" : "Stop") + " listening");
-        events.emit('snips-listening', listening);
+        event.emit('snips-listening', listening);
     }
 }
 
