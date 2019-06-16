@@ -6,4 +6,5 @@ python zero.py &
 
 
 cd ~/peeqo/electron
+export DISPLAY-=:0
 ./node_modules/.bin/electron main.js
