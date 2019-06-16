@@ -10,10 +10,10 @@ class SnipsDetector {
     }
 
     start() {
+        var self = this;
         this.client = mqtt.connect(this.hostname);
         this.client.on('connect', this.onConnect);
 
-        var self = this;
         this.client.on('message', function (topic, message) {
             if (topic === "hermes/asr/startListening") {
                 self.onListeningStateChanged(true);
@@ -28,6 +28,7 @@ class SnipsDetector {
     }
 
     onConnect() {
+        console.log(this);
         console.log("[Snips Log] Connected to MQTT broker " + this.hostname);
         this.client.subscribe('hermes/#');
     }
