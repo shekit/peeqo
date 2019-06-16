@@ -4,7 +4,7 @@ const common = require('js/helpers/common')
 const power = require('js/power/power')
 const speak = require('js/senses/speak')
 // const intentsEngine = require('js/intent-engines/dialogflow-intents')
-const intentsEngine = require('js/intent-engines/snips-intents')
+const IntentsEngine = require('js/intent-engines/snips-intents')
 const mic = require('js/senses/mic')
 
 function forceHue() {
@@ -14,27 +14,28 @@ function forceHue() {
 // TODO: Add debug buttons to display for the top 4 buttons on peeqo
 // TODO: Setup utility for handling button triggers and how to pass to "actions" or so on
 
+const intentEngine = new IntentsEngine();
+
 module.exports = () => {
 
+	// Explicit for now, others are through the engine
 	event.on('wakeword', action.wakeword);
-
 	event.on('hue', forceHue);
 
-	// passes on response object from STT engine
-	event.on('final-command', intentsEngine.parseIntent);
+    intentEngine.interceptEvents();
 
-	event.on('no-command', () => {
-		event.emit("led-on", {anim:'fadeOutError',color:'red'})
-	});
-
-	event.on('end-speech-to-text', () => {
-		
-		if(process.env.OS == "unsupported"){
-			document.getElementById("wakeword").style.backgroundColor = ""
-		} 
-
-		event.emit('pipe-to-wakeword')
-	})
+	// event.on('no-command', () => {
+	// 	event.emit("led-on", {anim:'fadeOutError',color:'red'})
+	// });
+    //
+	// event.on('end-speech-to-text', () => {
+	//
+	// 	if(process.env.OS == "unsupported"){
+	// 		document.getElementById("wakeword").style.backgroundColor = ""
+	// 	}
+    //
+	// 	event.emit('pipe-to-wakeword')
+	// })
 
 	// passes id of div to show
 	event.on('show-div', common.showDiv)
