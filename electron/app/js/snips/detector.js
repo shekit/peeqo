@@ -28,7 +28,7 @@ class SnipsDetector {
     }
 
     onConnect() {
-        console.log("[Snips Log] Connected to MQTT broker " + hostname);
+        console.log("[Snips Log] Connected to MQTT broker " + this.hostname);
         client.subscribe('hermes/#');
     }
 
