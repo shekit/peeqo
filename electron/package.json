@@ -27,6 +27,7 @@
     "snowboy": "1.2.0",
     "spotify-web-api-node": "^4.0.0",
     "through2": "^3.0.0",
-    "zerorpc": "^0.9.7"
+    "zerorpc": "^0.9.7",
+    "mqtt": "^3.0.0"
   }
 }

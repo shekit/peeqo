@@ -4,12 +4,15 @@ require('app-module-path').addPath(__dirname)
 
 const event = require('js/events/events')
 const mic = require('js/senses/mic')
+const SnipsDetector = require('js/snips/detector')
 
 let listen = null
+var detector = null;
 
-if(process.env.OS !== 'unsupported'){
+if(process.env.OS !== 'unsupported') {
 	// only include snowboy for supported OS
-	listen = require('js/senses/listen')
+	// listen = require('js/senses/listen')
+	detector = new SnipsDetector();
 }
 
 const Eyes = require('js/face/eyes')
@@ -86,6 +89,10 @@ if(process.env.OS == 'unsupported'){
         event.emit('hue')
     })
 } else {
-	listen.startListening()
+	if(detector != null) {
+		detector.start();
+	}
+
+	// listen.startListening()
 	document.getElementById("wakeword").style.display = "none"
 }
