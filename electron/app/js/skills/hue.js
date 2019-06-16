@@ -6,6 +6,34 @@ const speak = require('js/senses/speak')
 class PeeqoHue {
     constructor() {
         this.hue = jsHue()
+        this.bridge = null
+        this.user = null
+    }
+
+    authenticatedRequest(req) {
+        if(this.bridge == null) {
+            this.bridge = this.hue.bridge(config.hue.bridgeIp)
+
+            var username = config.hue.bridgeUser
+
+            if(username == null) {
+                this.bridge.createUser('peeqo#testdevice').then(data => {
+                    console.log(data)
+                    username = data[0].success.username;
+                    console.log('New bridge username: ', username)
+                    this.user = this.bridge.user(username)
+                }).catch(e => console.error('Error creating user for Hue bridge', e))
+            }
+            else {
+                this.user = this.bridge.user(username)
+            }
+
+            req()
+        }
+        else {
+            speak.speak('Sorry, no Phillips Hue bridges were found matching the requested IP')
+            console.error('No bridges found')
+        }
     }
 
     discoverNearbyBridges() {
@@ -17,7 +45,7 @@ class PeeqoHue {
             else {
                 bridges.forEach(b => {
                     console.log("Bridge found at: %s", b.internalipaddress)
-                    speak.speak("Phillips Huge bridge found!")
+                    // speak.speak("Phillips Huge bridge found!")
                 })
             }
         }).catch(e => console.error('Error finding bridges', e))
@@ -25,36 +53,32 @@ class PeeqoHue {
 
     changeGroupState(groupName, groupState) {
 
-        var bridge = this.hue.bridge(config.hue.bridgeIp)
+        console.log('changeGroupState ', groupName, ' ', groupState)
 
-        if(bridge != null) {
-            bridge.createUser('peeqo#connectorDevice').then(data => {
-                var username = data[0].success.username;
+        var self = this
+        this.authenticatedRequest(function(){
+            self.user.getGroups().then(groups => {
+                console.log(groups)
+                if(Object.keys(groups).length === 0) {
+                    speak.speak('Sorry, no groups were found')
+                    console.error('No groups found')
+                }
+                else {
+                    var id = 1
+                    Object.keys(groups).forEach(g => {
+                        var group = groups[g]
+                        if(group.name === groupName) {
+                            console.log('name matched')
+                            self.user.setGroupState(id, groupState)
+                            return
+                        }
+                        id++
+                    })
+                }
 
-                console.log('New bridge username: ', username)
-
-                var user = bridge.user(username)
-
-                user.getGroups().then(groups => {
-                    if(groups.length === 0) {
-                        speak.speak('Sorry, no groups were found')
-                        console.error('No groups found')
-                    }
-                    else {
-                        groups.forEach(g => {
-                            console.log('group:')
-                            console.log(g)
-                        })
-                    }
-
-                    actions.setAnswer({type:'remote', queryTerms: ['light'], text: 'Assigned group state'})
-                })
-            }).catch(e => console.error('Error creating user for Hue bridge'))
-        }
-        else {
-            speak.speak('Sorry, no Phillips Hue bridges were found matching the requested IP')
-            console.error('No bridges found')
-        }
+                actions.setAnswer({type:'remote', queryTerms: ['light'], text: 'Assigned group state'})
+            })
+        })
     }
 }
 

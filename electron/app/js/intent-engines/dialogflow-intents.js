@@ -53,7 +53,7 @@ function parseIntent(cmd){
         case "hue":
             let hue = new PeeqoHue()
 			hue.discoverNearbyBridges()
-			hue.changeGroupState(cmd.params.hue.groupName, {state: cmd.params.hue.state})
+			hue.changeGroupState(cmd.params.hue_group.stringValue, {on: cmd.params.hue_state.stringValue === "on"})
             break
 
 		default:
