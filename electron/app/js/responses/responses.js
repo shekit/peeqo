@@ -66,10 +66,7 @@ module.exports = {
 			color: 'aqua'
 		},
 		sound: 'alert.wav',
-    	volume: 0.1,
-		cbAfter: function(){
-			event.emit('speech-to-text')
-		}
+    	volume: 0.1
 	},
 
 	ok: {

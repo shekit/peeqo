@@ -3,12 +3,12 @@ const action = require('js/actions/actions')
 const common = require('js/helpers/common')
 const power = require('js/power/power')
 const speak = require('js/senses/speak')
-const dialogflow = require('js/intent-engines/dialogflow')
-const dialogflowIntents = require('js/intent-engines/dialogflow-intents')
+// const intentsEngine = require('js/intent-engines/dialogflow-intents')
+const intentsEngine = require('js/intent-engines/snips-intents')
 const mic = require('js/senses/mic')
 
 function forceHue() {
-    dialogflowIntents.parseIntent({intent: 'hue', params: {hue: {groupName: 'Kitchen', state: 'off'}}})
+    intentsEngine.parseIntent({intent: 'hue', params: {hue: {groupName: 'Kitchen', state: 'off'}}})
 }
 
 // TODO: Add debug buttons to display for the top 4 buttons on peeqo
@@ -16,27 +16,24 @@ function forceHue() {
 
 module.exports = () => {
 
-	event.on('wakeword', action.wakeword)
+	event.on('wakeword', action.wakeword);
 
-	event.on('hue', forceHue)
+	event.on('hue', forceHue);
 
 	// passes on response object from STT engine
-	event.on('final-command', dialogflowIntents.parseIntent)
+	event.on('final-command', intentsEngine.parseIntent);
 
 	event.on('no-command', () => {
 		event.emit("led-on", {anim:'fadeOutError',color:'red'})
-	})
+	});
 
-	event.on('speech-to-text', dialogflow.start)
-
-	event.on('end-speech-to-text', () =>{
+	event.on('end-speech-to-text', () => {
 		
 		if(process.env.OS == "unsupported"){
 			document.getElementById("wakeword").style.backgroundColor = ""
 		} 
 
 		event.emit('pipe-to-wakeword')
-		
 	})
 
 	// passes id of div to show

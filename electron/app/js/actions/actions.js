@@ -79,9 +79,7 @@ async function setAnswer(ans=null, overrides={}){
 }
 
 function wakeword(){
-	setAnswer(responses.wakeword, {type:'wakeword', cbBefore: function(){
-			speak.setVolume(0.1)
-	}})
+	setAnswer(responses.wakeword, {type:'wakeword'})
 }
 
 
