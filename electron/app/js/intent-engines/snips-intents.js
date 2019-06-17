@@ -88,7 +88,7 @@ class SnipsIntentEngine extends IntentEngine {
                 break
 
             case "Patrick":
-                actions.setAnswer(responses.patrick, {type: 'local');
+                actions.setAnswer(responses.patrick, {type: 'local'});
                 break;
 
             default:
