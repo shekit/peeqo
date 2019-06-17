@@ -7,10 +7,6 @@ const speak = require('js/senses/speak')
 const IntentsEngine = require('js/intent-engines/snips-intents')
 const mic = require('js/senses/mic')
 
-function forceHue() {
-    intentsEngine.parseIntent({intent: 'hue', params: {hue: {groupName: 'Kitchen', state: 'off'}}})
-}
-
 // TODO: Add debug buttons to display for the top 4 buttons on peeqo
 // TODO: Setup utility for handling button triggers and how to pass to "actions" or so on
 
@@ -20,22 +16,13 @@ module.exports = () => {
 
 	// Explicit for now, others are through the engine
 	event.on('wakeword', action.wakeword);
-	event.on('hue', forceHue);
 
     intentEngine.interceptEvents();
 
-	// event.on('no-command', () => {
-	// 	event.emit("led-on", {anim:'fadeOutError',color:'red'})
-	// });
-    //
-	// event.on('end-speech-to-text', () => {
-	//
-	// 	if(process.env.OS == "unsupported"){
-	// 		document.getElementById("wakeword").style.backgroundColor = ""
-	// 	}
-    //
-	// 	event.emit('pipe-to-wakeword')
-	// })
+	event.on('no-command', () => {
+		event.emit("led-on", {anim:'fadeOutError',color:'red'})
+	});
+
 
 	// passes id of div to show
 	event.on('show-div', common.showDiv)

@@ -5,26 +5,40 @@ const Timer = require('js/skills/timer')
 const event = require('js/events/events')
 const responses = require('js/responses/responses')
 const IntentEngine = require('js/intent-engines/base-intents');
+const speak = require('js/senses/speak')
 
 // TODO: Make a base class to handle a lot of this stuff
 class SnipsIntentEngine extends IntentEngine {
     constructor() {
         super();
+        this.intentDetected = false;
     }
 
     interceptEvents() {
         var self = this;
-        event.on('snips-onConnect', function(){
-            event.emit('onConnect');
+        event.on('snips-onConnect', function() {
+            event.emit('led-on', {anim: 'circle', color: 'aqua'});
+            speak.speak('Snips MQTT connected!');
         });
 
-        event.on('snips-finalCommand', self.parseIntent);
+        event.on('snips-finalCommand', function(intent) {
+            self.intentDetected = true;
+            self.parseIntent(intent);
+        });
 
-        event.on('snips-wakeword', function(){
+        event.on('snips-wakeword', function() {
+            self.intentDetected = false;
             event.emit('wakeword');
         });
 
         event.on('snips-listening', function(listening) {
+            if(!self.intentDetected) {
+                if(!listening) {
+                    event.emit('no-command');
+                    return;
+                }
+            }
+
             event.emit('listening', listening);
         });
     }

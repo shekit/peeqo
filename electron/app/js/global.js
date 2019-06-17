@@ -43,52 +43,47 @@ document.addEventListener("keydown", (e)=>{
 
 // initiate eyes and glasses
 const eyes = new Eyes()
-event.emit('show-div', 'eyeWrapper')
-event.emit('start-blinking')
-const glasses = new Glasses()
+event.emit('show-div', 'eyeWrapper');
+event.emit('start-blinking');
+const glasses = new Glasses();
 
 
 setTimeout(()=>{
 	
-},3000)
+},3000);
 
 // initiate buttons
 buttons.initializeButtons()
 
 //initiate leds and run initial animation
-const leds = require('js/senses/leds')
-event.emit('led-on', {anim: 'circle', color: 'aqua'})
+const leds = require('js/senses/leds');
+event.emit('led-on', {anim: 'circle', color: 'aqua'});
 
 // initiate camera
-const Camera = require('js/senses/camera')
-const camera = new Camera()
+const Camera = require('js/senses/camera');
+const camera = new Camera();
 
 // initiate servos
-const Servo = require('js/senses/servo')
-const servo = new Servo()
+const Servo = require('js/senses/servo');
+const servo = new Servo();
 
 // initiate text
-const text = require('js/senses/text')
+const text = require('js/senses/text');
 
 // set audio volume level. 0 - mute; 1-max
-event.emit('set-volume',0.4)
+event.emit('set-volume',0.4);
 
 // initiate listening or show wakeword button
 if(process.env.OS == 'unsupported'){
 	// on certain linux systems and windows snowboy offline keyword detection does not work
 	// pass in OS=unsupported when starting application to show a clickable wakeword button instead
 	document.getElementById("wakeword").addEventListener('click', (e) => {
-		e.preventDefault()
+		e.preventDefault();
 		document.getElementById("wakeword").style.backgroundColor = "red"
 		event.emit('wakeword')
-	})
-
-    document.getElementById("hue").addEventListener('click', (e) => {
-        e.preventDefault()
-        document.getElementById("hue").style.backgroundColor = "red"
-        event.emit('hue')
-    })
-} else {
+	});
+}
+else {
 	if(detector != null) {
 		detector.start();
 	}
