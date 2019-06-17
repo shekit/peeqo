@@ -22,6 +22,7 @@ module.exports = {
 
 
 	confused: {
+		name: 'Confused',
 		localFolder: 'confused',
 		queryTerms: ['shrug', 'confused', 'dont know'],
 		servo: null,
@@ -34,6 +35,7 @@ module.exports = {
 	},
 
 	greeting: {
+		name: 'Greeting',
 		localFolder: 'greeting',
 		queryTerms: ['hello','hi','howdy','sup','whatsup'],
 		servo: 'look-up',
@@ -46,6 +48,7 @@ module.exports = {
 	},
 
 	bye: {
+        name: 'Bye',
 		localFolder: "bye",
 		queryTerms:["bye","see you","goodbye","ciao","so long"],
 		servo: "look-up-slow",
@@ -58,6 +61,7 @@ module.exports = {
 	},
 
 	wakeword: {
+        name: 'Wakeword',
 		localFolder: null,
 		queryTerms: null,
 		servo: 'alert',
@@ -70,6 +74,7 @@ module.exports = {
 	},
 
 	ok: {
+        name: 'OK',
 		localFolder: 'ok',
 		queryTerms:["ok","okay","you got it"],
 		servo: "look-up",
@@ -82,6 +87,7 @@ module.exports = {
 	},
 
 	alarm: {
+        name: 'Alarm',
 		localFolder: "alarm",
 		queryTerms:["alarm","ringing","party"],
 		servo: "jiggle",
@@ -94,6 +100,7 @@ module.exports = {
 	},
 
     cat: {
+        name: 'Cat',
         localFolder: 'null',
         queryTerms: ['cute cat', 'funny cat', 'funny kitten', 'cute kitten'],
         servo: 'jiggle',
@@ -106,6 +113,7 @@ module.exports = {
     },
 
 	patrick: {
+        name: 'Patrick',
         localFolder: 'patrick',
         queryTerms: ['no_this_is_patrick'],
         servo: 'look-up',
@@ -116,4 +124,4 @@ module.exports = {
         sound: null,
         volume: 0.5
 	}
-}
+};

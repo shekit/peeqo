@@ -1,45 +1,54 @@
 'use strict'
 
-require('app-module-path').addPath(__dirname)
+require('app-module-path').addPath(__dirname);
 
-const event = require('js/events/events')
-const mic = require('js/senses/mic')
-const SnipsDetector = require('js/snips/detector')
+// Dependencies
+const event = require('js/events/events');
+const mic = require('js/senses/mic');
+const Eyes = require('js/face/eyes');
+const Glasses = require('js/face/glasses');
+const speak = require('js/senses/speak');
+const buttons = require('js/senses/buttons');
+const weather = require('js/skills/weather');
+const PeeqoListener = require('js/events/listeners');
+const Actions = require('js/actions/actions');
 
-let listen = null
+// Snip-dependencies (need to abstract out further, probably, into a configuration thing)
+const SnipsDetector = require('js/snips/detector');
+const SnipsIntentsEngine = require('js/intent-engines/snips-intents');
+
+
+// 'global' variables
+const peeqoListener = new PeeqoListener();
 var detector = null;
+const peeqoActor = new PeeqoActor();
 
+// Start the intent engine
+peeqoListener.setIntentEngine(new SnipsIntentsEngine(peeqoActor));
+
+// Only include the detector for environments it is supported on
 if(process.env.OS !== 'unsupported') {
-	// only include snowboy for supported OS
-	// listen = require('js/senses/listen')
 	detector = new SnipsDetector();
 }
 
-const Eyes = require('js/face/eyes')
-const Glasses = require('js/face/glasses')
-const speak = require('js/senses/speak')
-const buttons = require('js/senses/buttons')
-const weather = require('js/skills/weather')
-
-const listeners = require('js/events/listeners')()
 
 // keyboard shortcuts
 const remote = require('electron').remote
 
 document.addEventListener("keydown", (e)=>{
-	if(e.which == 123){
+	if(e.which === 123){
 
 		// F12 - show js console
 		remote.getCurrentWindow().toggleDevTools()
-
-	} else if(e.which == 116){
+	}
+	else if(e.which === 116){
 
 		// F5 - refresh page
 		// make sure page is in focus, not console
 		location.reload()
-
 	}
-})
+});
+
 
 // initiate eyes and glasses
 const eyes = new Eyes()
@@ -48,12 +57,13 @@ event.emit('start-blinking');
 const glasses = new Glasses();
 
 
+// Wait for initialization? This should probably be done via an async stream instead
 setTimeout(()=>{
-	
-},3000);
+}, 3000);
+
 
 // initiate buttons
-buttons.initializeButtons()
+buttons.initializeButtons();
 
 //initiate leds and run initial animation
 const leds = require('js/senses/leds');
@@ -71,10 +81,10 @@ const servo = new Servo();
 const text = require('js/senses/text');
 
 // set audio volume level. 0 - mute; 1-max
-event.emit('set-volume',0.4);
+event.emit('set-volume', 0.4);
 
 // initiate listening or show wakeword button
-if(process.env.OS == 'unsupported'){
+if(process.env.OS === 'unsupported') {
 	// on certain linux systems and windows snowboy offline keyword detection does not work
 	// pass in OS=unsupported when starting application to show a clickable wakeword button instead
 	document.getElementById("wakeword").addEventListener('click', (e) => {
@@ -88,6 +98,5 @@ else {
 		detector.start();
 	}
 
-	// listen.startListening()
 	document.getElementById("wakeword").style.display = "none"
 }

@@ -5,7 +5,7 @@ const util = require('util')
 const readdir = util.promisify(fs.readdir)
 const exists = util.promisify(fs.stat)
 
-function showDiv(id){
+function showDiv(id) {
 
 	// Hides all divs in majorDivs array and shows div passed as param
 	// @param {string} id - id of div to show
@@ -137,9 +137,9 @@ function pickRandom(array){
 async function transitionFromMedia(ms){
 	return new Promise((resolve) => {
 		let wait = setTimeout(()=>{
-			clearTimeout(wait)
-			event.emit('show-div','eyeWrapper')
-			event.emit('transition-eyes-back')
+			clearTimeout(wait);
+			event.emit('show-div','eyeWrapper');
+			event.emit('transition-eyes-back');
 			resolve(true)
 		}, ms)
 	})
@@ -150,19 +150,19 @@ function transitionToMedia(duration, type){
 		return null
 	}
 
-	duration = parseInt(duration)
-	let loop = 1
+	duration = parseInt(duration);
+	let loop = 1;
 
 	let afterTransition = () => {
-		if(type == 'video'){
-			let video = document.getElementById("video")
-			event.emit('show-div','videoWrapper')
+		if(type === 'video'){
+			let video = document.getElementById("video");
+			event.emit('show-div','videoWrapper');
 			video.play()
-		} else if(type == 'gif' || type == 'img'){
-			let img = document.getElementById("gif")
+		} else if(type === 'gif' || type === 'img'){
+			let img = document.getElementById("gif");
 			event.emit('show-div', 'gifWrapper')
 		}
-	}
+	};
 
 	event.emit('transition-eyes-away', afterTransition)
 }

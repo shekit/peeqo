@@ -1,13 +1,14 @@
-const jsHue = require('js/lib/jshue')
-const config = require('config/config')
-const actions = require('js/actions/actions')
-const speak = require('js/senses/speak')
+const jsHue = require('js/lib/jshue');
+const config = require('config/config');
+const { PeeqoActor, PeeqoAction } = require('js/actions/actions');
+const speak = require('js/senses/speak');
 
 class PeeqoHue {
-    constructor() {
-        this.hue = jsHue()
-        this.bridge = null
-        this.user = null
+    constructor(actor) {
+        this.hue = jsHue();
+        this.bridge = null;
+        this.user = null;
+        this.actor = actor;
     }
 
     authenticatedRequest(req) {
@@ -55,20 +56,20 @@ class PeeqoHue {
 
         console.log('changeGroupState ', groupName, ' ', groupState)
 
-        var self = this
-        this.authenticatedRequest(function(){
+        let self = this;
+        this.authenticatedRequest(function() {
             self.user.getGroups().then(groups => {
-                console.log(groups)
+                console.log(groups);
                 if(Object.keys(groups).length === 0) {
                     speak.speak('Sorry, no groups were found')
                     console.error('No groups found')
                 }
                 else {
-                    var id = 1
+                    let id = 1;
                     Object.keys(groups).forEach(g => {
-                        var group = groups[g]
+                        let group = groups[g];
                         if(group.name === groupName) {
-                            console.log('name matched')
+                            console.log('name matched');
                             self.user.setGroupState(id, groupState)
                             return
                         }
@@ -76,7 +77,7 @@ class PeeqoHue {
                     })
                 }
 
-                actions.setAnswer({type:'remote', queryTerms: ['light'], text: 'Assigned group state'})
+                self.actor.performAction(new PeeqoAction({type:'remote', queryTerms: ['light'], text: 'Assigned group state'}));
             })
         })
     }
