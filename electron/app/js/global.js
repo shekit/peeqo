@@ -11,7 +11,7 @@ const speak = require('js/senses/speak');
 const buttons = require('js/senses/buttons');
 const weather = require('js/skills/weather');
 const PeeqoListener = require('js/events/listeners');
-const Actions = require('js/actions/actions');
+const { PeeqoActor, PeeqoAction } = require('js/actions/actions');
 
 // Snip-dependencies (need to abstract out further, probably, into a configuration thing)
 const SnipsDetector = require('js/snips/detector');
@@ -24,7 +24,7 @@ var detector = null;
 const peeqoActor = new PeeqoActor();
 
 // Start the intent engine
-peeqoListener.setIntentEngine(new SnipsIntentsEngine(peeqoActor));
+peeqoListener.setIntentEngine(new SnipsIntentsEngine(peeqoActor), peeqoActor);
 
 // Only include the detector for environments it is supported on
 if(process.env.OS !== 'unsupported') {

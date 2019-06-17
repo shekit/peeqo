@@ -1,5 +1,5 @@
 const event = require('js/events/events');
-const action = require('js/actions/actions');
+const { PeeqoActor, PeeqoAction } = require('js/actions/actions');
 const common = require('js/helpers/common');
 const power = require('js/power/power');
 const speak = require('js/senses/speak');
@@ -12,14 +12,15 @@ class PeeqoListener {
 	constructor() {
 	}
 
-	setIntentEngine(intentEngine) {
+	setIntentEngine(intentEngine, actor) {
         this.intentEngine = intentEngine;
+        this.actor = actor;
         this.setup();
 	}
 
 	setup() {
         // Explicit for now, others are through the engine
-        event.on('wakeword', action.wakeword);
+        event.on('wakeword', this.actor.wakeword);
 
         this.intentEngine.interceptEvents();
 
