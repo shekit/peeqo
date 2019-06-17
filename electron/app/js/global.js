@@ -88,15 +88,22 @@ if(process.env.OS === 'unsupported') {
 	// on certain linux systems and windows snowboy offline keyword detection does not work
 	// pass in OS=unsupported when starting application to show a clickable wakeword button instead
 	document.getElementById("wakeword").addEventListener('click', (e) => {
-		e.preventDefault();
-		document.getElementById("wakeword").style.backgroundColor = "red"
-		event.emit('wakeword')
+        e.preventDefault();
+		event.emit('wakeword');
 	});
+
+    document.getElementById("command").addEventListener('keyup', (e) => {
+    	e.preventDefault();
+
+    	if(e.keyCode === 13) {
+            console.log("Command ", document.getElementById("command").innerText);
+		}
+    });
 }
 else {
 	if(detector != null) {
 		detector.start();
 	}
 
-	document.getElementById("wakeword").style.display = "none"
+	document.getElementById("debug_panel").style.display = "none"
 }

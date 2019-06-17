@@ -1,7 +1,6 @@
 const event = require('js/events/events');
 const common = require('js/helpers/common');
 const media = require('js/helpers/media');
-const responses = require('js/responses/responses');
 
 const ACTION_HISTORY_LIMIT = 5;
 
@@ -93,18 +92,14 @@ class PeeqoActor {
 		this.actionHistory = [];
 	}
 
-	performAction(action, overrides={}) {
-		this.actionHistory.push(action);
-		if(this.actionHistory.length > ACTION_HISTORY_LIMIT) {
-			this.actionHistory.pop();
-		}
+    performAction(action, overrides={}) {
+        this.actionHistory.push(action);
+        if(this.actionHistory.length > ACTION_HISTORY_LIMIT) {
+            this.actionHistory.pop();
+        }
 
-		action.perform(overrides);
-	}
-
-	wakeword() {
-		this.performAction(new PeeqoAction(responses.wakeword, {type:'wakeword'}));
-	}
+        action.perform(overrides);
+    }
 }
 
 
