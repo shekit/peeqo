@@ -104,4 +104,16 @@ module.exports = {
         sound: null,
         volume: 0.5
     },
+
+	patrick: {
+        localFolder: 'patrick',
+        queryTerms: ['no_this_is_patrick'],
+        servo: 'look-up',
+        led: {
+            anim: 'blink',
+            color: 'green'
+        },
+        sound: null,
+        volume: 0.5
+	}
 }

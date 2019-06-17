@@ -11,7 +11,7 @@ async function setAnswer(ans=null, overrides={}){
 	console.log("RESPONSE > START")
 
 	// merge overriden values and new values
-	Object.assign(ans, overrides)
+	Object.assign(ans, overrides);
 
 	if(ans.hasOwnProperty('sound') && ans.sound !== null) {
 		if(ans.hasOwnProperty('volume') && ans.volume != null) {

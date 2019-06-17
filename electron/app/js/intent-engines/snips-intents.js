@@ -36,7 +36,16 @@ class SnipsIntentEngine extends IntentEngine {
         console.log('cmd');
         console.log(cmd);
 
-        switch(cmd.intent){
+        var intentName = "";
+
+        if(cmd.intent != null && cmd.intent.intentName != null) {
+            var intentSplit = cmd.intent.intentName.split(':');
+            if(intentSplit.length === 2) {
+                intentName = intentSplit[1];
+            }
+        }
+
+        switch(intentName) {
 
             case "greeting":
                 actions.setAnswer(responses.greeting, {type: 'remote'})
@@ -77,6 +86,10 @@ class SnipsIntentEngine extends IntentEngine {
                 hue.discoverNearbyBridges()
                 hue.changeGroupState(cmd.params.hue_group.stringValue, {on: cmd.params.hue_state.stringValue === "on"})
                 break
+
+            case "Patrick":
+                actions.setAnswer(responses.patrick, {type: 'local');
+                break;
 
             default:
                 actions.setAnswer(responses.confused, {type:'local'})
