@@ -138,6 +138,12 @@ if(process.env.OS === 'unsupported') {
                             value: {
                                 value: `${slot2}`
                             }
+                        },
+
+                        {
+                            value: {
+                                value: `${slot3}`
+                            }
                         }
                     ]
                 };

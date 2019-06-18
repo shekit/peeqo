@@ -6,6 +6,7 @@ const event = require('js/events/events');
 const responses = require('js/responses/responses');
 const IntentEngine = require('js/intent-engines/base-intents');
 const speak = require('js/senses/speak');
+const PeeqoGithub = require('js/skills/github');
 
 class SnipsIntentEngine extends IntentEngine {
     constructor(actor) {
@@ -166,6 +167,21 @@ class SnipsIntentEngine extends IntentEngine {
             case "Patrick":
                 this.actor.performAction(new PeeqoAction(responses.patrick), {type: 'local'});
                 break;
+
+            case "GitHub":
+                // Pull data from slots
+                if(cmd.hasOwnProperty("slots") && cmd.slots != null && cmd.slots.length >= 2) {
+                    let targetSlot = cmd.slots[0].value.value;
+
+                    let gh = new PeeqoGithub();
+                    if(targetSlot === "pulls") {
+                        gh.listUserPulls('zphensley42');
+                    }
+                    else if(targetSlot === "repos") {
+                        gh.listUserRepos('zphensley42');
+                    }
+                    break;
+                }
 
             default:
                 this.actor.performAction(new PeeqoAction(responses.confused), {type:'local'});
