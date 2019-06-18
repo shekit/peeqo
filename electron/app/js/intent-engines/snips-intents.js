@@ -61,22 +61,43 @@ class SnipsIntentEngine extends IntentEngine {
 
         switch(intentName) {
 
-            case "greeting":
+            case "Greeting":
                 this.actor.performAction(new PeeqoAction(responses.greeting, {type: 'remote'}));
                 break;
 
-            case "camera":
-                event.emit(`camera-${cmd.params.on.stringValue}`);
+            case "Camera":
+                // Pull data from slots
+                if (cmd.hasOwnProperty("slots") && cmd.slots != null && cmd.slots.length >= 1) {
+                    let actionSlot = cmd.slots[0].value.value;
+                    if(actionSlot === 'start') {
+                        actionSlot = 'record';
+                    }
+                    event.emit(`camera-${actionSlot}`);
+                }
+                else {
+                    this.actor.performAction(new PeeqoAction(responses.confused, {type:'local', cbDuring: function() {
+                        speak.speak('Please provide an action next time.');
+                    }}));
+                }
                 break;
 
-            case "timer":
-                let timer = new Timer(cmd.params.time.numberValue, cmd.params.timeUnit.stringValue);
-                timer.startTimer();
+            case "Timer":
+                // Pull data from slots
+                if (cmd.hasOwnProperty("slots") && cmd.slots != null && cmd.slots.length >= 1) {
+                    let durationSlot = (cmd.slots[0].value.hours * 3600) + (cmd.slots[0].value.minutes * 60) + (cmd.slots[0].value.seconds);
+                    let timer = new Timer(durationSlot, 'seconds');
+                    timer.startTimer();
+                    break;
+                }
+
+                this.actor.performAction(new PeeqoAction(responses.confused, {type:'local', cbDuring: function() {
+                    speak.speak('Please provide a duration next time.');
+                }}));
                 break;
 
             case "Weather":
                 // Pull data from slots
-                if (cmd.hasOwnProperty("slots") && cmd.slots != null && cmd.slots.length >= 2) {
+                if (cmd.hasOwnProperty("slots") && cmd.slots != null && cmd.slots.length >= 1) {
                     let citySlot = cmd.slots[0].value.value;
 
                     let weather = new PeeqoWeather(this.actor);
@@ -84,17 +105,17 @@ class SnipsIntentEngine extends IntentEngine {
                 }
                 else {
                     this.actor.performAction(new PeeqoAction(responses.confused, {type:'local', cbDuring: function() {
-                            speak.speak('Please request a city next time.');
+                        speak.speak('Please request a city next time.');
                     }}));
                 }
 
                 break;
 
-            case "changeGlasses":
+            case "ChangeGlasses":
                 event.emit("change-glasses");
                 break;
 
-            case "goodbye":
+            case "Goodbye":
                 this.actor.performAction(new PeeqoAction(responses.bye, {type: 'local'}));
                 break;
 
@@ -136,8 +157,8 @@ class SnipsIntentEngine extends IntentEngine {
                 }
                 else {
                     this.actor.performAction(new PeeqoAction(responses.confused, {type:'local', cbDuring: function() {
-                            speak.speak('Please provide the light next time.');
-                        }}));
+                        speak.speak('Please provide the light next time.');
+                    }}));
                 }
                 break;
             }
