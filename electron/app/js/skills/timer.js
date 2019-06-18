@@ -25,10 +25,10 @@ class Timer {
 
 	startTimer(actor) {
 
-		actor.performAction(new PeeqoAction(responses.ok, {type: 'local'}));
+		actor.performAction(new PeeqoAction(responses.ok), {type: 'local'});
 
 		this.timer = setTimeout(()=> {
-            actor.performAction(new PeeqoAction(responses.alarm, {type: 'local'}));
+            actor.performAction(new PeeqoAction(responses.alarm), {type: 'local'});
 			console.log("timer over");
 			this.timer = null
 		}, this.time)

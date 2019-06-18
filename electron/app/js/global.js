@@ -92,11 +92,18 @@ if(process.env.OS === 'unsupported') {
 		event.emit('wakeword');
 	});
 
-    document.getElementById("command").addEventListener('keyup', (e) => {
+    document.getElementById("intent").addEventListener('keyup', (e) => {
     	e.preventDefault();
+    	let textInput = document.getElementById("intent");
 
     	if(e.keyCode === 13) {
-            console.log("Command ", document.getElementById("command").innerText);
+    		let intent = textInput.value;
+            console.log(`Intent: ${intent}`);
+            event.emit('snips-finalCommand', {
+            	intent: {
+            		intentName: `zphensley42:${intent}`
+				}
+			});
 		}
     });
 }

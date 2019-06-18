@@ -30,17 +30,17 @@ function showDiv(id) {
 	}
 }
 
-async function setQuery(answer){
+async function setQuery(answer) {
 
 	// returns path to local file or remote query terms
 
-	if(answer.type == 'local'){
+	if(answer.type === 'local'){
 		// search from local folder
-		let file = await pickFile(path.join(process.cwd(),'app','media','responses',answer.localFolder))
-		console.log(`Picked File: ${file}`)
+		let file = await pickFile(path.join(process.cwd(),'app','media','responses',answer.localFolder));
+		console.log(`Picked File: ${file}`);
 		return file
 
-	} else if(answer.type == 'remote'){
+	} else if(answer.type === 'remote'){
 		// use remote query terms array to search online service
 		let searchTerm = pickRandom(answer.queryTerms)
 		return searchTerm
@@ -77,7 +77,7 @@ async function pickFile(folderPath){
 	// picks random media file from folder
 	// @param {string} folderPath - path of folder to pick file from
 
-	let isValid = false
+	let isValid = false;
 	try{
 		isValid = await exists(folderPath)
 	} catch (e){

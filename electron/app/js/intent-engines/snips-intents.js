@@ -62,7 +62,7 @@ class SnipsIntentEngine extends IntentEngine {
         switch(intentName) {
 
             case "Greeting":
-                this.actor.performAction(new PeeqoAction(responses.greeting, {type: 'remote'}));
+                this.actor.performAction(new PeeqoAction(responses.greeting), {type: 'remote'});
                 break;
 
             case "Camera":
@@ -75,9 +75,9 @@ class SnipsIntentEngine extends IntentEngine {
                     event.emit(`camera-${actionSlot}`);
                 }
                 else {
-                    this.actor.performAction(new PeeqoAction(responses.confused, {type:'local', cbDuring: function() {
+                    this.actor.performAction(new PeeqoAction(responses.confused), {type:'local', cbDuring: function() {
                         speak.speak('Please provide an action next time.');
-                    }}));
+                    }});
                 }
                 break;
 
@@ -90,9 +90,9 @@ class SnipsIntentEngine extends IntentEngine {
                     break;
                 }
 
-                this.actor.performAction(new PeeqoAction(responses.confused, {type:'local', cbDuring: function() {
+                this.actor.performAction(new PeeqoAction(responses.confused), {type:'local', cbDuring: function() {
                     speak.speak('Please provide a duration next time.');
-                }}));
+                }});
                 break;
 
             case "Weather":
@@ -104,9 +104,9 @@ class SnipsIntentEngine extends IntentEngine {
                     weather.getWeather(citySlot);
                 }
                 else {
-                    this.actor.performAction(new PeeqoAction(responses.confused, {type:'local', cbDuring: function() {
+                    this.actor.performAction(new PeeqoAction(responses.confused), {type:'local', cbDuring: function() {
                         speak.speak('Please request a city next time.');
-                    }}));
+                    }});
                 }
 
                 break;
@@ -116,7 +116,7 @@ class SnipsIntentEngine extends IntentEngine {
                 break;
 
             case "Goodbye":
-                this.actor.performAction(new PeeqoAction(responses.bye, {type: 'local'}));
+                this.actor.performAction(new PeeqoAction(responses.bye), {type: 'local'});
                 break;
 
             case "KittyTime":
@@ -124,7 +124,7 @@ class SnipsIntentEngine extends IntentEngine {
                     speak.speak(`It's Kitty Time!`);
                 };
 
-                this.actor.performAction(new PeeqoAction(responses.cat, {type: 'remote', cbDuring: callbackDuringResponse}));
+                this.actor.performAction(new PeeqoAction(responses.cat), {type: 'remote', cbDuring: callbackDuringResponse});
                 break;
 
             case "HueGroup": {
@@ -138,9 +138,9 @@ class SnipsIntentEngine extends IntentEngine {
                     hue.controlGroupLights(roomSlot, {on: stateSlot === "on"});
                 }
                 else {
-                    this.actor.performAction(new PeeqoAction(responses.confused, {type:'local', cbDuring: function() {
+                    this.actor.performAction(new PeeqoAction(responses.confused), {type:'local', cbDuring: function() {
                         speak.speak('Please provide the group next time.');
-                    }}));
+                    }});
                 }
                 break;
             }
@@ -156,19 +156,19 @@ class SnipsIntentEngine extends IntentEngine {
                     hue.controlLight(lightSlot, {on: stateSlot === "on"});
                 }
                 else {
-                    this.actor.performAction(new PeeqoAction(responses.confused, {type:'local', cbDuring: function() {
+                    this.actor.performAction(new PeeqoAction(responses.confused), {type:'local', cbDuring: function() {
                         speak.speak('Please provide the light next time.');
-                    }}));
+                    }});
                 }
                 break;
             }
 
             case "Patrick":
-                this.actor.performAction(new PeeqoAction(responses.patrick, {type: 'local'}));
+                this.actor.performAction(new PeeqoAction(responses.patrick), {type: 'local'});
                 break;
 
             default:
-                this.actor.performAction(new PeeqoAction(responses.confused, {type:'local'}));
+                this.actor.performAction(new PeeqoAction(responses.confused), {type:'local'});
                 break
         }
     }

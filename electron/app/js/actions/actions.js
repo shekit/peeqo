@@ -16,11 +16,10 @@ class PeeqoAction {
      * @returns {Promise<void>}
      */
     async perform(overrides={}) {
-    	console.log('Performing action ', this.data.name);
-
         // merge overridden values and new values
         Object.assign(this.data, overrides);
 
+        console.log('Performing action ', this.data);
 
         if(this.data.hasOwnProperty('sound') && this.data.sound !== null) {
             if(this.data.hasOwnProperty('volume') && this.data.volume != null) {

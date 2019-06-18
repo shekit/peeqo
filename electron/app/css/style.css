@@ -69,3 +69,7 @@ html, body, div {
 	position: absolute;
 	z-index: 100;
 }
+#intent{
+	position: absolute;
+	z-index: 100;
+}
