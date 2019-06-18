@@ -74,9 +74,20 @@ class SnipsIntentEngine extends IntentEngine {
                 timer.startTimer();
                 break;
 
-            case "weather":
-                let weather = new PeeqoWeather(this.actor);
-                weather.getWeather(cmd.params.city.stringValue);
+            case "Weather":
+                // Pull data from slots
+                if (cmd.hasOwnProperty("slots") && cmd.slots != null && cmd.slots.length >= 2) {
+                    let citySlot = cmd.slots[0].value.value;
+
+                    let weather = new PeeqoWeather(this.actor);
+                    weather.getWeather(citySlot);
+                }
+                else {
+                    this.actor.performAction(new PeeqoAction(responses.confused, {type:'local', cbDuring: function() {
+                            speak.speak('Please request a city next time.');
+                    }}));
+                }
+
                 break;
 
             case "changeGlasses":
@@ -87,20 +98,49 @@ class SnipsIntentEngine extends IntentEngine {
                 this.actor.performAction(new PeeqoAction(responses.bye, {type: 'local'}));
                 break;
 
-            case "cat":
+            case "KittyTime":
                 let callbackDuringResponse = () => {
-                    speak.speak(`${cmd.responseText}`);
-                    console.log(`responseText: ${cmd.responseText}`)
+                    speak.speak(`It's Kitty Time!`);
                 };
 
                 this.actor.performAction(new PeeqoAction(responses.cat, {type: 'remote', cbDuring: callbackDuringResponse}));
                 break;
 
-            case "hue":
+            case "HueGroup": {
                 let hue = new PeeqoHue(this.actor);
-                hue.discoverNearbyBridges();
-                hue.changeGroupState(cmd.params.hue_group.stringValue, {on: cmd.params.hue_state.stringValue === "on"});
+
+                // Pull data from slots
+                if (cmd.hasOwnProperty("slots") && cmd.slots != null && cmd.slots.length >= 2) {
+                    let roomSlot = cmd.slots[0].value.value;
+                    let stateSlot = cmd.slots[1].value.value;   // don't use raw here, use defined in slot instead (since casing matters)
+
+                    hue.controlGroupLights(roomSlot, {on: stateSlot === "on"});
+                }
+                else {
+                    this.actor.performAction(new PeeqoAction(responses.confused, {type:'local', cbDuring: function() {
+                        speak.speak('Please provide the group next time.');
+                    }}));
+                }
                 break;
+            }
+
+            case "HueLight": {
+                let hue = new PeeqoHue(this.actor);
+
+                // Pull data from slots
+                if(cmd.hasOwnProperty("slots") && cmd.slots != null && cmd.slots.length >= 2) {
+                    let lightSlot = cmd.slots[0].value.value;
+                    let stateSlot = cmd.slots[1].value.value;   // don't use raw here, use defined in slot instead (since casing matters)
+
+                    hue.controlLight(lightSlot, {on: stateSlot === "on"});
+                }
+                else {
+                    this.actor.performAction(new PeeqoAction(responses.confused, {type:'local', cbDuring: function() {
+                            speak.speak('Please provide the light next time.');
+                        }}));
+                }
+                break;
+            }
 
             case "Patrick":
                 this.actor.performAction(new PeeqoAction(responses.patrick, {type: 'local'}));
@@ -110,8 +150,6 @@ class SnipsIntentEngine extends IntentEngine {
                 this.actor.performAction(new PeeqoAction(responses.confused, {type:'local'}));
                 break
         }
-
-        // setAnswer(responses[cmd.intent], {type:'remote'})
     }
 }
 
