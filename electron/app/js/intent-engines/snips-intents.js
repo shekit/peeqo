@@ -1,5 +1,5 @@
 const { PeeqoActor, PeeqoAction } = require('js/actions/actions');
-const PeeqoWeather = require('js/skills/weather');
+const { PeeqoWeather } = require('js/skills/weather');
 const PeeqoHue = require('js/skills/hue');
 const Timer = require('js/skills/timer');
 const event = require('js/events/events');
@@ -86,7 +86,7 @@ class SnipsIntentEngine extends IntentEngine {
                 if (cmd.hasOwnProperty("slots") && cmd.slots != null && cmd.slots.length >= 1) {
                     let durationSlot = (cmd.slots[0].value.hours * 3600) + (cmd.slots[0].value.minutes * 60) + (cmd.slots[0].value.seconds);
                     let timer = new Timer(durationSlot, 'seconds');
-                    timer.startTimer();
+                    timer.startTimer(this.actor);
                     break;
                 }
 

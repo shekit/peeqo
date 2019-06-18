@@ -71,5 +71,38 @@ html, body, div {
 }
 #intent{
 	position: absolute;
+	margin-left: 50px;
+	z-index: 100;
+}
+#slot1{
+	position: absolute;
+	margin-left: 50px;
+	z-index: 100;
+}
+#slot2{
+	position: absolute;
+	margin-left: 50px;
+	z-index: 100;
+}
+#slot3{
+	position: absolute;
+	margin-left: 50px;
+	z-index: 100;
+}
+
+#intentlabel {
+	position: absolute;
+	z-index: 100;
+}
+#slot1label {
+	position: absolute;
+	z-index: 100;
+}
+#slot2label {
+	position: absolute;
+	z-index: 100;
+}
+#slot3label {
+	position: absolute;
 	z-index: 100;
 }

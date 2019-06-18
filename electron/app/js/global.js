@@ -95,15 +95,55 @@ if(process.env.OS === 'unsupported') {
     document.getElementById("intent").addEventListener('keyup', (e) => {
     	e.preventDefault();
     	let textInput = document.getElementById("intent");
+    	let slot1Input = document.getElementById("slot1");
+    	let slot2Input = document.getElementById("slot2");
+    	let slot3Input = document.getElementById("slot3");
 
     	if(e.keyCode === 13) {
     		let intent = textInput.value;
+    		let sendIntent = null;
+    		let slot1 = slot1Input.value;
+    		let slot2 = slot2Input.value;
+    		let slot3 = slot3Input.value;
             console.log(`Intent: ${intent}`);
-            event.emit('snips-finalCommand', {
-            	intent: {
-            		intentName: `zphensley42:${intent}`
-				}
-			});
+
+            if(intent === "Timer") {
+                sendIntent = {
+                    intent: {
+                        intentName: `zphensley42:${intent}`
+                    },
+                    slots: [
+                        {
+                            value: {
+                                hours: `${slot1}`,
+                                minutes: `${slot2}`,
+                                seconds: `${slot3}`
+                            }
+                        },
+                    ]
+                };
+			}
+            else {
+                sendIntent = {
+                    intent: {
+                        intentName: `zphensley42:${intent}`
+                    },
+                    slots: [
+                        {
+                            value: {
+                                value: `${slot1}`
+                            }
+                        },
+                        {
+                            value: {
+                                value: `${slot2}`
+                            }
+                        }
+                    ]
+                };
+			}
+
+            event.emit('snips-finalCommand', sendIntent);
 		}
     });
 }

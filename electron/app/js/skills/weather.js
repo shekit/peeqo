@@ -52,5 +52,5 @@ class PeeqoWeather {
 }
 
 module.exports = {
-	PeeqoWeather
+    PeeqoWeather : PeeqoWeather
 };
