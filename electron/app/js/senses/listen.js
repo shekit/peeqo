@@ -12,6 +12,8 @@ const mic = require('js/senses/mic')
 
 // const dialogflow = require('js/intent-engines/dialogflow')
 
+const wakewordDetector = setupSnowboy()
+
 function setupSnowboy(){
 	//SNOWBOY WAKEWORD DETECTOR
 
@@ -49,8 +51,6 @@ function setupRecorder(){
 
 
 function startListening(){
-	
-	const wakewordDetector = setupSnowboy()
 
 	const {recorder, recorderOpts} = setupRecorder()
 
@@ -90,8 +90,26 @@ function startListening(){
 	mic.getMic().pipe(wakewordDetector)
 }
 
+/**
+Unpipe Wakedetector to mute Peeqo
+**/
+function stopListening() {
+	mic.getMic().unpipe(wakewordDetector)
+        event.emit("stop-listening")
+}
+
+/**
+Pipe Wakedetector to resume listening
+**/
+function resumeListening() {
+	mic.getMic().pipe(wakewordDetector)
+        event.emit("resume-listening")
+}
+
 module.exports = {
-	startListening
+	startListening,
+	stopListening,
+	resumeListening
 }
 
 
