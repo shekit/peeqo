@@ -11,7 +11,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "electron": "2.0.18",
+    "electron": "9.1.0",
     "electron-rebuild": "1.8.1"
   },
   "dependencies": {
