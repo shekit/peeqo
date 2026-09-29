@@ -1,0 +1,25 @@
+{
+  "name": "peeqo",
+  "private": true,
+  "description": "Peeqo robot software. The 2019 Electron app lives in electron/ and is left untouched.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "sim": "npm run dev -w @peeqo/sim",
+    "build": "npm run build -w @peeqo/sim",
+    "test": "vitest run",
+    "typecheck": "tsc -p packages/core && tsc -p packages/core/tsconfig.test.json && tsc -p packages/face && tsc -p packages/face/tsconfig.test.json && tsc -p apps/sim",
+    "verify:sim": "npm run verify -w @peeqo/sim",
+    "check": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

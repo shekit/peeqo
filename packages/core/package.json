@@ -1,0 +1,10 @@
+{
+  "name": "@peeqo/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Peeqo's motion core: neck kinematics, the safety governor, LED model and 2019 content decoding. Uses no DOM or Node APIs, so the simulator and the robot run the same code.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

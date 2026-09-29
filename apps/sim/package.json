@@ -1,0 +1,26 @@
+{
+  "name": "@peeqo/sim",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser simulator for Peeqo: 3D robot, face, LED ring and head motion through the same safety governor the robot will use.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "build:head-model": "node tools/build-head-model.mjs",
+    "verify": "node scripts/verify.mjs"
+  },
+  "dependencies": {
+    "@peeqo/core": "*",
+    "@peeqo/face": "*",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@types/three": "^0.186.0",
+    "occt-import-js": "^0.0.23",
+    "playwright-core": "^1.63.0",
+    "vite": "^8.3.1"
+  }
+}

@@ -1,1 +1,7 @@
 .DS_Store
+
+# next-gen workspace (packages/, apps/)
+node_modules/
+dist/
+coverage/
+*.log
