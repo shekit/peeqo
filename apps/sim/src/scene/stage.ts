@@ -4,12 +4,12 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 /** Camera presets (three.js world: +Y up, Peeqo faces +X, Peeqo's left is −Z). Millimetres. */
 export const VIEWS = {
-  'three-quarter': { position: [560, 330, 330], target: [0, 150, 0] },
-  front: { position: [720, 200, 0], target: [0, 165, 0] },
-  side: { position: [0, 200, 720], target: [0, 150, 0] },
-  top: { position: [0.01, 900, 0], target: [0, 150, 0] },
-  face: { position: [330, 215, 0], target: [0, 212, 0] },
-  neck: { position: [330, 120, 250], target: [0, 105, 0] },
+  'three-quarter': { position: [380, 230, 230], target: [0, 95, 0] },
+  front: { position: [480, 130, 0], target: [0, 100, 0] },
+  side: { position: [0, 130, 480], target: [0, 95, 0] },
+  top: { position: [0.01, 560, 0], target: [0, 95, 0] },
+  face: { position: [230, 136, 0], target: [0, 134, 0] },
+  neck: { position: [200, 85, 150], target: [0, 68, 0] },
 } as const satisfies Record<string, { position: readonly number[]; target: readonly number[] }>;
 
 export type ViewName = keyof typeof VIEWS;
@@ -64,7 +64,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   const camera = new THREE.PerspectiveCamera(32, 1, 1, 6000);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
-  controls.minDistance = 150;
+  controls.minDistance = 100;
   controls.maxDistance = 1800;
   controls.maxPolarAngle = Math.PI * 0.495;
 

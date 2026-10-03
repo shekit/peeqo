@@ -8,8 +8,8 @@ export interface SafetyLimits {
   readonly hornMaxDeg: number;
   /** Largest allowed |reachRatio|. At 1 the horn and leg line up: a singular, high-force position. */
   readonly maxReachRatio: number;
-  /** Largest ball-joint tilt out of the plane square to its stud, degrees. */
-  readonly maxJointTiltDeg: number;
+  /** Largest tilt of a top rod end off its screw, degrees (turning about the screw is free). */
+  readonly maxRodEndTiltDeg: number;
   /** Hard box on poses, checked before the geometry. */
   readonly maxAbsPitchDeg: number;
   readonly maxAbsRollDeg: number;
@@ -25,26 +25,31 @@ export interface SafetyLimits {
 }
 
 /**
- * Conservative defaults. The horn range, speeds and accelerations are set just above what the four 2019
- * servo animations (which ran on the real robot) use: across their 232 frames, horn angles of −22.5° to
- * +57.5°, 92°/s and 2,800°/s² of pitch/roll, 115 mm/s and 3,500 mm/s² of heave, and 545°/s at a servo
- * (checked in packages/core/test/legacy.test.ts). The reach-ratio and joint-tilt caps are generic mechanical
- * margins; inside this horn range the 2019 animations peak at 0.911 and 6.2°. Widen anything only after
- * checking clearances on the physical robot.
+ * Defaults for the dev kit. Collisions between parts are checked separately against the CAD (see
+ * clearance.ts); these cover what the CAD cannot:
+ * - Horn range: ±90° about the assembled position, the travel of a standard servo. The collision tables
+ *   already keep each horn between about +1° (its U-horn meets the servo holder below that) and its upper
+ *   reach; the real servo limits are set when the servos are calibrated.
+ * - Reach ratio: keeps horn and leg away from lining up (a singular, high-force position).
+ * - Rod ends: each eye is 3.3 mm thick between platform lugs 3.52 mm either side of the leg's centre plane,
+ *   so it first touches a lug at 23.7° of tilt (re-measured by apps/sim/tools/build-model.mjs, which fails
+ *   if this limit comes within 5° of it). The collision tables enforce the same contact with a 0.5 mm gap.
+ * - Speeds: pose rates enough for the 2019 animations as designed (92°/s and 115 mm/s at most), and no servo
+ *   faster than a micro servo's no-load speed.
  */
 export const DEFAULT_SAFETY_LIMITS: SafetyLimits = Object.freeze({
-  hornMinDeg: -23,
-  hornMaxDeg: 58,
+  hornMinDeg: -90,
+  hornMaxDeg: 90,
   maxReachRatio: 0.95,
-  maxJointTiltDeg: 30,
+  maxRodEndTiltDeg: 18,
   maxAbsPitchDeg: 25,
   maxAbsRollDeg: 25,
   minHeaveMm: -20,
   maxHeaveMm: 20,
-  maxAngularSpeedDegPerS: 120,
-  maxAngularAccelDegPerS2: 4000,
+  maxAngularSpeedDegPerS: 150,
+  maxAngularAccelDegPerS2: 4500,
   maxHeaveSpeedMmPerS: 150,
   maxHeaveAccelMmPerS2: 4500,
-  // Roughly the no-load speed of a micro servo at 5 V (0.1 s per 60°).
+  // Roughly the no-load speed of a hobby servo at 5 V (0.1 s per 60°).
   maxServoSpeedDegPerS: 600,
 });

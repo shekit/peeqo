@@ -1,4 +1,4 @@
-import { PEEQO_2019_GEOMETRY, type PlatformGeometry } from './geometry.ts';
+import { SERVO_SIMULATOR_2019_GEOMETRY, type PlatformGeometry } from './geometry.ts';
 import { solveFk, type Pose } from './kinematics.ts';
 import { DEG_TO_RAD, mapTriple, type Triple } from './math.ts';
 import { channelToServoOrder, pulseUsToServoDeg } from './servo.ts';
@@ -52,10 +52,16 @@ export function legacyFrameToHornRad(frame: LegacyFrame): Triple {
   return mapTriple(channelToServoOrder(frame), (pulse) => legacyPulseToHornDeg(pulse) * DEG_TO_RAD);
 }
 
-/** Converts a 2019 animation into head poses, one per 33 ms frame. Throws if a frame has no matching pose. */
+/**
+ * Converts a 2019 animation into the head poses it was designed as, one per 33 ms frame, by solving it on the
+ * 2019 ServoSimulator's geometry (where its pulses were recorded). Throws if a frame has no matching pose.
+ * These are intended motions (look up 7°, roll ±4°, rise 7 mm); on the dev kit they are played around its
+ * neutral pose and the governor keeps them inside the safe range. The dev kit's own pulse-to-angle mapping
+ * is unknown until its servos are calibrated, so its raw 2019 pulses are not reused.
+ */
 export function legacyAnimationToPoses(
   frames: readonly LegacyFrame[],
-  geometry: PlatformGeometry = PEEQO_2019_GEOMETRY,
+  geometry: PlatformGeometry = SERVO_SIMULATOR_2019_GEOMETRY,
   name = 'animation',
 ): Pose[] {
   const poses: Pose[] = [];
@@ -67,4 +73,13 @@ export function legacyAnimationToPoses(
     previous = pose;
   });
   return poses;
+}
+
+/** A pose sequence shifted so that its zero sits at `neutral` (angles and height add). */
+export function aroundNeutral(poses: readonly Pose[], neutral: Pose): Pose[] {
+  return poses.map((p) => ({
+    pitchDeg: neutral.pitchDeg + p.pitchDeg,
+    rollDeg: neutral.rollDeg + p.rollDeg,
+    heaveMm: neutral.heaveMm + p.heaveMm,
+  }));
 }

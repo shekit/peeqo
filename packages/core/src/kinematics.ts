@@ -1,4 +1,4 @@
-import { PEEQO_2019_GEOMETRY, type PlatformGeometry } from './geometry.ts';
+import { DEFAULT_GEOMETRY, type PlatformGeometry } from './geometry.ts';
 import {
   DEG_TO_RAD,
   SERVO_INDICES,
@@ -58,7 +58,7 @@ export interface IkSolution {
 
 export function platformTransform(
   pose: Pose,
-  geometry: PlatformGeometry = PEEQO_2019_GEOMETRY,
+  geometry: PlatformGeometry = DEFAULT_GEOMETRY,
 ): { rotation: Mat3; position: Vec3 } {
   // Positive rotation about +Y lowers the front (+X) edge, so looking up is a negative Y rotation.
   const rotation = rotationZYX(pose.rollDeg * DEG_TO_RAD, -pose.pitchDeg * DEG_TO_RAD, 0);
@@ -71,25 +71,25 @@ function unitAt(angleDeg: number): Vec3 {
 }
 
 /** Servo shaft point for a servo, on the shaft plane (z = 0). */
-export function shaftPoint(servo: ServoIndex, geometry: PlatformGeometry = PEEQO_2019_GEOMETRY): Vec3 {
+export function shaftPoint(servo: ServoIndex, geometry: PlatformGeometry = DEFAULT_GEOMETRY): Vec3 {
   const u = unitAt(geometry.baseAnglesDeg[servo]);
   return [u[0] * geometry.baseRadiusMm, u[1] * geometry.baseRadiusMm, 0];
 }
 
 /** Upper ball joint of a leg in the platform's own frame. */
-export function platformJointLocal(servo: ServoIndex, geometry: PlatformGeometry = PEEQO_2019_GEOMETRY): Vec3 {
+export function platformJointLocal(servo: ServoIndex, geometry: PlatformGeometry = DEFAULT_GEOMETRY): Vec3 {
   const u = unitAt(geometry.platformAnglesDeg[servo]);
   return [u[0] * geometry.platformRadiusMm, u[1] * geometry.platformRadiusMm, 0];
 }
 
 /** Unit vector along a servo's shaft: square to its horn's plane. */
-export function shaftAxis(servo: ServoIndex, geometry: PlatformGeometry = PEEQO_2019_GEOMETRY): Vec3 {
+export function shaftAxis(servo: ServoIndex, geometry: PlatformGeometry = DEFAULT_GEOMETRY): Vec3 {
   const b = geometry.hornAnglesDeg[servo] * DEG_TO_RAD;
   return [-Math.sin(b), Math.cos(b), 0];
 }
 
 /** Horn tip position for a given horn angle (radians). */
-export function hornTipPoint(servo: ServoIndex, hornRad: number, geometry: PlatformGeometry = PEEQO_2019_GEOMETRY): Vec3 {
+export function hornTipPoint(servo: ServoIndex, hornRad: number, geometry: PlatformGeometry = DEFAULT_GEOMETRY): Vec3 {
   const shaft = shaftPoint(servo, geometry);
   const b = geometry.hornAnglesDeg[servo] * DEG_TO_RAD;
   const a = geometry.hornLengthMm;
@@ -101,7 +101,7 @@ export function hornTipPoint(servo: ServoIndex, hornRad: number, geometry: Platf
 }
 
 /** Inverse kinematics: horn angles that put the platform at `pose`. Same closed form as Platform.pde (calcAlpha). */
-export function solveIk(pose: Pose, geometry: PlatformGeometry = PEEQO_2019_GEOMETRY): IkSolution {
+export function solveIk(pose: Pose, geometry: PlatformGeometry = DEFAULT_GEOMETRY): IkSolution {
   const { rotation, position } = platformTransform(pose, geometry);
   const legs = mapTriple(SERVO_INDICES, (servo): LegSolution => {
     const shaft = shaftPoint(servo, geometry);
@@ -139,7 +139,7 @@ export interface FkOptions {
  */
 export function solveFk(
   hornRad: Triple,
-  geometry: PlatformGeometry = PEEQO_2019_GEOMETRY,
+  geometry: PlatformGeometry = DEFAULT_GEOMETRY,
   options: FkOptions = {},
 ): Pose | null {
   if (!hornRad.every(Number.isFinite)) return null;

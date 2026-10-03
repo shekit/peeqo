@@ -1,7 +1,9 @@
 import { checkPose, describeViolations, summarizeViolations, type PoseCheck } from './check.ts';
-import { clampToSafe, lerpPose } from './envelope.ts';
-import { PEEQO_2019_GEOMETRY, type PlatformGeometry } from './geometry.ts';
-import { HOME_POSE, type Pose } from './kinematics.ts';
+import type { ClearanceModel } from './clearance.ts';
+import { DEFAULT_CLEARANCE } from './devKit.ts';
+import { clampToSafe, findNeutralPose, lerpPose } from './envelope.ts';
+import { DEFAULT_GEOMETRY, type PlatformGeometry } from './geometry.ts';
+import type { Pose } from './kinematics.ts';
 import { DEFAULT_SAFETY_LIMITS, type SafetyLimits } from './limits.ts';
 import type { Triple } from './math.ts';
 
@@ -17,7 +19,7 @@ export interface PoseRates {
 export interface GovernorOutput {
   /** The latest target, as asked for. */
   readonly requested: Pose;
-  /** Where the governor is heading: the request, pulled back toward home if it was unsafe. */
+  /** Where the governor is heading: the request, pulled back toward the neutral pose if it was unsafe. */
   readonly goal: Pose;
   /** The pose commanded this tick. Always passes checkPose. */
   readonly pose: Pose;
@@ -36,43 +38,56 @@ const asArray = (p: Pose): [number, number, number] => [p.pitchDeg, p.rollDeg, p
 const asPose = (v: readonly [number, number, number]): Pose => ({ pitchDeg: v[0], rollDeg: v[1], heaveMm: v[2] });
 const isFinitePose = (p: Pose): boolean =>
   Number.isFinite(p.pitchDeg) && Number.isFinite(p.rollDeg) && Number.isFinite(p.heaveMm);
+const isAt = (a: readonly number[], b: readonly number[]): boolean => a.every((v, j) => Math.abs(v - b[j]!) < 1e-9);
 
 /**
- * The only path to the servos. Targets from anywhere are clamped to the safe range, then followed with
- * speed and acceleration limits, and every commanded pose is re-checked before it is used.
+ * The only path to the servos. Targets from anywhere are clamped to the safe range, then followed in straight
+ * lines with speed and acceleration limits, and every commanded pose is re-checked before it is used. The safe
+ * range is not convex, so a straight line between two safe poses can cross an unsafe pocket: when that blocks
+ * the way, the governor goes round by the neutral pose (every goal is reached in a straight line from there).
  * Call step() at a fixed rate; each call returns the pose and horn angles to send.
  */
 export class MotionGovernor {
   readonly geometry: PlatformGeometry;
   readonly limits: SafetyLimits;
+  readonly clearance: ClearanceModel | null;
+  /** Where the governor starts, and the pose unsafe targets are pulled back toward. */
+  readonly neutral: Pose;
   #pose: Pose;
   #rates: [number, number, number] = [0, 0, 0];
   #hornDeg: Triple;
   #requested: Pose;
   #goal: Pose;
   #goalNotes: string[] = [];
+  /** Heading back to the neutral pose because the straight path to the goal was blocked. */
+  #detour = false;
   #rejectedInput = false;
   #last: GovernorOutput;
 
+  /**
+   * @param start the starting (and neutral) pose; by default the neutral pose found for this robot
+   * @param clearance collision tables for this geometry, or null to skip collision checks (other robots only)
+   */
   constructor(
-    geometry: PlatformGeometry = PEEQO_2019_GEOMETRY,
+    geometry: PlatformGeometry = DEFAULT_GEOMETRY,
     limits: SafetyLimits = DEFAULT_SAFETY_LIMITS,
-    start: Pose = HOME_POSE,
+    start: Pose | null = null,
+    clearance: ClearanceModel | null = DEFAULT_CLEARANCE,
   ) {
     this.geometry = geometry;
     this.limits = limits;
-    const home = checkPose(HOME_POSE, geometry, limits);
-    if (!home.ok) {
-      throw new Error(`The home pose breaks the safety limits: ${describeViolations(home.violations).join('; ')}`);
-    }
-    const initial = checkPose(start, geometry, limits);
+    this.clearance = clearance;
+    const neutral = start ?? findNeutralPose(geometry, limits, clearance);
+    if (!neutral) throw new Error('No level pose is safe with these limits; check the geometry, limits and collision tables.');
+    const initial = checkPose(neutral, geometry, limits, clearance);
     if (!initial.ok) {
       throw new Error(`The start pose breaks the safety limits: ${describeViolations(initial.violations).join('; ')}`);
     }
-    this.#pose = { ...start };
+    this.neutral = { pitchDeg: neutral.pitchDeg, rollDeg: neutral.rollDeg, heaveMm: neutral.heaveMm };
+    this.#pose = { ...this.neutral };
     this.#hornDeg = initial.hornDeg;
-    this.#requested = { ...start };
-    this.#goal = { ...start };
+    this.#requested = { ...this.neutral };
+    this.#goal = { ...this.neutral };
     this.#last = this.#makeOutput('ok', []);
   }
 
@@ -81,7 +96,7 @@ export class MotionGovernor {
     return this.#last;
   }
 
-  /** Sets where to go. Unsafe targets are pulled back toward home; non-numeric targets are ignored. */
+  /** Sets where to go. Unsafe targets are pulled back toward the neutral pose; non-numeric targets are ignored. */
   setTarget(target: Pose): void {
     if (!isFinitePose(target)) {
       this.#rejectedInput = true;
@@ -89,10 +104,10 @@ export class MotionGovernor {
     }
     this.#rejectedInput = false;
     this.#requested = { pitchDeg: target.pitchDeg, rollDeg: target.rollDeg, heaveMm: target.heaveMm };
-    const { pose, clamped } = clampToSafe(this.#requested, this.geometry, this.limits);
+    const { pose, clamped } = clampToSafe(this.#requested, this.neutral, this.geometry, this.limits, this.clearance);
     this.#goal = pose;
     if (clamped) {
-      const why = summarizeViolations(checkPose(this.#requested, this.geometry, this.limits).violations);
+      const why = summarizeViolations(checkPose(this.#requested, this.geometry, this.limits, this.clearance).violations);
       this.#goalNotes = [`target outside the safe range: ${why}. Holding the nearest safe pose toward it.`];
     } else {
       this.#goalNotes = [];
@@ -104,27 +119,16 @@ export class MotionGovernor {
     if (!(dtS > 0) || !Number.isFinite(dtS)) return this.#last;
     const dt = Math.min(dtS, MAX_GOVERNOR_STEP_S);
     const L = this.limits;
-    const maxSpeed = [L.maxAngularSpeedDegPerS, L.maxAngularSpeedDegPerS, L.maxHeaveSpeedMmPerS] as const;
-    const maxAccel = [L.maxAngularAccelDegPerS2, L.maxAngularAccelDegPerS2, L.maxHeaveAccelMmPerS2] as const;
     const current = asArray(this.#pose);
-    const goal = asArray(this.#goal);
-
-    // Per axis: head for the goal as fast as the caps allow while still being able to stop on it.
-    const proposed: [number, number, number] = [0, 0, 0];
-    for (const j of [0, 1, 2] as const) {
-      const error = goal[j] - current[j];
-      const a = maxAccel[j];
-      const brakingSpeed = a * dt * (Math.sqrt(0.25 + (2 * Math.abs(error)) / (a * dt * dt)) - 0.5);
-      const desired = Math.sign(error) * Math.min(maxSpeed[j], brakingSpeed, Math.abs(error) / dt);
-      const change = Math.max(-a * dt, Math.min(a * dt, desired - this.#rates[j]));
-      proposed[j] = current[j] + (this.#rates[j] + change) * dt;
-    }
-    const candidate = asPose(proposed);
+    const neutral = asArray(this.neutral);
+    if (this.#detour && isAt(current, neutral)) this.#detour = false; // back at neutral: head out to the goal
+    const aim = this.#detour ? neutral : asArray(this.#goal);
+    const candidate = asPose(this.#stepToward(current, aim, dt));
 
     // Take the largest fraction of that step that is safe and keeps every servo under its speed cap.
     const accept = (fraction: number): { pose: Pose; check: PoseCheck } | null => {
       const pose = lerpPose(this.#pose, candidate, fraction);
-      const check = checkPose(pose, this.geometry, this.limits);
+      const check = checkPose(pose, this.geometry, this.limits, this.clearance);
       if (!check.ok) return null;
       for (const s of [0, 1, 2] as const) {
         if (Math.abs(check.hornDeg[s] - this.#hornDeg[s]) / dt > L.maxServoSpeedDegPerS) return null;
@@ -133,9 +137,10 @@ export class MotionGovernor {
     };
     let chosen = accept(1);
     const notes = [...this.#goalNotes];
+    if (this.#detour) notes.push('going round by the neutral pose: the straight path to the goal is blocked');
     if (chosen === null) {
       notes.push(
-        checkPose(candidate, this.geometry, this.limits).ok
+        checkPose(candidate, this.geometry, this.limits, this.clearance).ok
           ? 'servo speed capped'
           : 'motion stopped at the edge of the safe range',
       );
@@ -156,9 +161,17 @@ export class MotionGovernor {
     let status: GovernorStatus;
     if (chosen === null) {
       this.#rates = [0, 0, 0];
-      const atGoal = current.every((v, j) => Math.abs(v - goal[j]!) < 1e-9);
-      status = atGoal ? (notes.length > 0 ? 'limited' : 'ok') : 'blocked';
-      if (!atGoal) notes.push('holding still: no safe step toward the goal');
+      if (isAt(current, aim)) {
+        status = notes.length > 0 ? 'limited' : 'ok';
+      } else if (!this.#detour && !isAt(current, neutral)) {
+        // Blocked on the way to the goal: go round by the neutral pose, starting next step.
+        this.#detour = true;
+        notes.push('the straight path to the goal is blocked: going round by the neutral pose');
+        status = 'limited';
+      } else {
+        notes.push(this.#detour ? 'holding still: no safe step toward the neutral pose' : 'holding still at the neutral pose: no straight safe path to the goal');
+        status = 'blocked';
+      }
     } else {
       const next = asArray(chosen.pose);
       this.#rates = [(next[0] - current[0]) / dt, (next[1] - current[1]) / dt, (next[2] - current[2]) / dt];
@@ -172,6 +185,37 @@ export class MotionGovernor {
     }
     this.#last = this.#makeOutput(status, notes);
     return this.#last;
+  }
+
+  /**
+   * One step toward `aim` along the straight line to it: as fast as the speed caps allow while every axis can
+   * still stop on it, changing the velocity no faster than the acceleration caps allow (the whole change is scaled
+   * together, so from rest the path stays on the line).
+   */
+  #stepToward(current: readonly [number, number, number], aim: readonly [number, number, number], dt: number): [number, number, number] {
+    const L = this.limits;
+    const maxSpeed = [L.maxAngularSpeedDegPerS, L.maxAngularSpeedDegPerS, L.maxHeaveSpeedMmPerS] as const;
+    const maxAccel = [L.maxAngularAccelDegPerS2, L.maxAngularAccelDegPerS2, L.maxHeaveAccelMmPerS2] as const;
+    const error = [aim[0] - current[0], aim[1] - current[1], aim[2] - current[2]] as const;
+    const distance = Math.hypot(...error);
+    let speed = 0;
+    if (distance > 0) {
+      speed = Number.POSITIVE_INFINITY;
+      for (const j of [0, 1, 2] as const) {
+        const remaining = Math.abs(error[j]);
+        if (remaining === 0) continue;
+        const a = maxAccel[j];
+        const brakingSpeed = a * dt * (Math.sqrt(0.25 + (2 * remaining) / (a * dt * dt)) - 0.5);
+        speed = Math.min(speed, (Math.min(maxSpeed[j], brakingSpeed, remaining / dt) * distance) / remaining);
+      }
+    }
+    const change = error.map((e, j) => (distance > 0 ? (e / distance) * speed : 0) - this.#rates[j]!);
+    let scale = 1;
+    for (const j of [0, 1, 2] as const) {
+      const most = maxAccel[j] * dt;
+      if (Math.abs(change[j]!) > most) scale = Math.min(scale, most / Math.abs(change[j]!));
+    }
+    return [0, 1, 2].map((j) => current[j]! + (this.#rates[j]! + change[j]! * scale) * dt) as [number, number, number];
   }
 
   #makeOutput(status: GovernorStatus, notes: readonly string[]): GovernorOutput {

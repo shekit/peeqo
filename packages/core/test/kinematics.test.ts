@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HOME_POSE, PEEQO_2019_GEOMETRY, solve3, solveFk, solveIk, type Pose } from '../src/index.ts';
+import { DEV_KIT_GEOMETRY, HOME_POSE, SERVO_SIMULATOR_2019_GEOMETRY, solve3, solveFk, solveIk, type Pose } from '../src/index.ts';
 
 /**
  * Verbatim transcription of ServoSimulator/Platform.pde (calcQ + calcAlpha) as an independent oracle.
@@ -62,7 +62,7 @@ describe('inverse kinematics', () => {
     let compared = 0;
     for (let n = 0; n < 5000; n++) {
       const pose: Pose = { pitchDeg: (rand() - 0.5) * 30, rollDeg: (rand() - 0.5) * 30, heaveMm: (rand() - 0.5) * 30 };
-      const ours = solveIk(pose).legs.map((leg) => leg.hornRad);
+      const ours = solveIk(pose, SERVO_SIMULATOR_2019_GEOMETRY).legs.map((leg) => leg.hornRad);
       // Our pitch is a negative rotation about Y (face up); roll is rotation about X.
       const theirs = processingAlphas([(pose.rollDeg * Math.PI) / 180, (-pose.pitchDeg * Math.PI) / 180, 0], [0, 0, pose.heaveMm]);
       ours.forEach((alpha, i) => {
@@ -77,11 +77,20 @@ describe('inverse kinematics', () => {
     expect(compared).toBeGreaterThan(1000);
   });
 
-  it('puts every horn at the closed-form home angle', () => {
+  it('puts every horn at the closed-form home angle of the 2019 sketch', () => {
     // At home each leg spans 20 mm outward and 125 mm up: L = 569, M = 3250, N = 520.
     const expected = Math.asin(569 / Math.hypot(3250, 520)) - Math.atan2(520, 3250);
-    for (const leg of solveIk(HOME_POSE).legs) expect(leg.hornRad).toBeCloseTo(expected, 14);
+    for (const leg of solveIk(HOME_POSE, SERVO_SIMULATOR_2019_GEOMETRY).legs) expect(leg.hornRad).toBeCloseTo(expected, 14);
     expect((expected * 180) / Math.PI).toBeCloseTo(0.8649, 4);
+  });
+
+  it('has level horns and vertical legs at home on the dev kit (as in its CAD)', () => {
+    const ik = solveIk(HOME_POSE, DEV_KIT_GEOMETRY);
+    for (const leg of ik.legs) {
+      expect(leg.hornRad).toBeCloseTo(0, 12);
+      expect(Math.hypot(leg.hornTip[0], leg.hornTip[1])).toBeCloseTo(34.32, 9);
+      expect(leg.platformJoint[2] - leg.hornTip[2]).toBeCloseTo(58.1, 9);
+    }
   });
 
   it('keeps every leg at its exact length', () => {
@@ -95,7 +104,7 @@ describe('inverse kinematics', () => {
           leg.platformJoint[1] - leg.hornTip[1],
           leg.platformJoint[2] - leg.hornTip[2],
         );
-        expect(d).toBeCloseTo(PEEQO_2019_GEOMETRY.legLengthMm, 9);
+        expect(d).toBeCloseTo(DEV_KIT_GEOMETRY.legLengthMm, 9);
       }
     }
   });
@@ -112,7 +121,7 @@ describe('forward kinematics', () => {
     const rand = mulberry32(3);
     let solved = 0;
     for (let n = 0; n < 1000; n++) {
-      const pose: Pose = { pitchDeg: (rand() - 0.5) * 16, rollDeg: (rand() - 0.5) * 12, heaveMm: (rand() - 0.5) * 16 };
+      const pose: Pose = { pitchDeg: (rand() - 0.5) * 16, rollDeg: (rand() - 0.5) * 12, heaveMm: (rand() - 0.5) * 8 };
       const ik = solveIk(pose);
       if (!ik.reachable) continue;
       const back = solveFk([ik.legs[0].hornRad, ik.legs[1].hornRad, ik.legs[2].hornRad]);

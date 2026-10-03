@@ -8,8 +8,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "build:head-model": "node tools/build-head-model.mjs",
-    "verify": "node scripts/verify.mjs"
+    "build:model": "node tools/build-model.mjs",
+    "verify": "node scripts/verify.mjs",
+    "build:clearance": "node tools/build-clearance.mjs",
+    "check:clearance": "node tools/check-clearance.mjs"
   },
   "dependencies": {
     "@peeqo/core": "*",
@@ -21,6 +23,7 @@
     "@types/three": "^0.186.0",
     "occt-import-js": "^0.0.23",
     "playwright-core": "^1.63.0",
+    "three-mesh-bvh": "^0.9.15",
     "vite": "^8.3.1"
   }
 }

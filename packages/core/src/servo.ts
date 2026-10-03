@@ -3,7 +3,8 @@ import { mapTriple, type ServoIndex, type Triple } from './math.ts';
 /**
  * How horn angles become servo commands, as in the 2019 ServoSimulator (Platform.pde):
  * servo angle = 90° − horn angle, and 0–180° is spread linearly over 500–2560 µs.
- * Real servos differ slightly; per-servo calibration comes later, on the robot.
+ * Not yet confirmed for the dev kit: before driving it, measure for each servo which pulse puts its horn level
+ * and which way it turns.
  */
 export interface PulseRange {
   readonly at0DegUs: number;

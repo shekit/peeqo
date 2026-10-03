@@ -2,8 +2,14 @@
 //
 //   npm run build -w @peeqo/sim && npm run verify -w @peeqo/sim -- [screenshot-dir]
 //
-// Serves dist/, drives the page through window.__peeqo, asserts the robot behaves (safety clamping, 2019
-// animations, LEDs, drawn model matching the kinematics) and fails on any console error. Needs Google Chrome.
+// Serves dist/, drives the page through window.__peeqo and checks that:
+//  - every commanded pose is safe, and unsafe requests stop at the edge of the safe range;
+//  - the drawn robot matches the kinematics (horn tips exactly; leg tops within the model's 0.2 mm);
+//  - at random safe poses, the REAL mesh-to-mesh gaps (measured live, independently of the collision tables)
+//    are never smaller than the core promises (its table reading, or the smallest clearance verified once over
+//    every admitted pose, whichever is less), less the kinematic model's 0.2 mm;
+//  - 2019 animations, LEDs and the face work, with no console errors.
+// Needs Google Chrome.
 
 import fs from 'node:fs';
 import http from 'node:http';
@@ -57,8 +63,8 @@ function check(name, ok, detail = '') {
   results.push(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  (${detail})` : ''}`);
   if (!ok) failed = true;
 }
-const state = () => page.evaluate(() => window.__peeqo.state());
-const hornTipError = () => page.evaluate(() => window.__peeqo.hornTipError());
+const hook = (name, ...args) => page.evaluate(([n, a]) => window.__peeqo[n](...a), [name, args]);
+const state = () => hook('state');
 async function waitFor(predicate, timeoutMs = 6000) {
   const start = Date.now();
   for (;;) {
@@ -68,10 +74,9 @@ async function waitFor(predicate, timeoutMs = 6000) {
     await page.waitForTimeout(40);
   }
 }
-const atHome = (s) => Math.abs(s.output.pose.pitchDeg) < 1e-3 && Math.abs(s.output.pose.rollDeg) < 1e-3 && Math.abs(s.output.pose.heaveMm) < 1e-3;
 /** Sets a target, waits until the governor has taken exactly that request, then until the head settles. */
 async function setTargetAndSettle(target, timeoutMs = 6000) {
-  await page.evaluate((t) => window.__peeqo.setTarget(t), target);
+  await hook('setTarget', target);
   return waitFor((x) => {
     const o = x.output;
     const taken = ['pitchDeg', 'rollDeg', 'heaveMm'].every((k) => o.requested[k] === target[k]);
@@ -84,74 +89,110 @@ const shot = (name) => page.screenshot({ path: path.join(outDir, `${name}.png`) 
 
 try {
   await page.goto(url);
-  await page.waitForFunction(() => window.__ready === true, null, { timeout: 30000 });
+  await page.waitForFunction(() => window.__ready === true, null, { timeout: 60000 });
+  const neutral = await hook('neutral');
+  const near = (a, b, tol = 1e-3) => ['pitchDeg', 'rollDeg', 'heaveMm'].every((k) => Math.abs(a[k] - b[k]) < tol);
 
   let s = await state();
-  check('starts at home and safe', atHome(s) && s.output.status === 'ok');
-  check('drawn horn tips match the kinematics at home', (await hornTipError()) < 1e-6, `${(await hornTipError()).toExponential(2)} mm`);
-  await page.waitForTimeout(500);
-  await shot('01-home');
+  check('starts at the neutral pose, safe', near(s.output.pose, neutral) && s.output.status === 'ok', JSON.stringify(neutral));
+  check('drawn horn tips match the kinematics', (await hook('hornTipError')) < 1e-6);
+  check('drawn legs reach their ball joints', (await hook('legTopError')) < 0.25, `${(await hook('legTopError')).toFixed(3)} mm`);
+  const verifiedMm = await hook('verifiedClearance');
+  let table = await hook('tableClearance');
+  let probe = await hook('probeCollisions');
+  check(
+    'real mesh gaps at neutral are at least what the core promises',
+    probe.minMm >= Math.min(table.minMm, verifiedMm) - 0.25 && probe.minMm >= 0.25,
+    `measured ${probe.minMm.toFixed(3)} mm (${probe.between}), tables promise ${table.minMm.toFixed(3)} mm (${table.between}), verified pairs ${verifiedMm.toFixed(2)} mm`,
+  );
+  await page.waitForTimeout(400);
+  await shot('01-neutral');
 
-  s = await setTargetAndSettle({ pitchDeg: 20, rollDeg: 0, heaveMm: 0 });
+  const pitchTarget = { ...neutral, pitchDeg: 20 };
+  const pitchEdge = (await hook('safeEdge', pitchTarget)).pitchDeg;
+  s = await setTargetAndSettle(pitchTarget);
   check(
     'unsafe request (pitch 20°) is held at the safe edge',
-    !!s && s.output.status === 'limited' && s.output.pose.pitchDeg > 6.9 && s.output.pose.pitchDeg < 7.1,
-    s ? `pitch ${s.output.pose.pitchDeg.toFixed(3)}°, status ${s.output.status}` : 'timed out',
+    !!s && s.output.status === 'limited' && Math.abs(s.output.pose.pitchDeg - pitchEdge) < 1e-3,
+    s ? `pitch ${s.output.pose.pitchDeg.toFixed(3)}° (edge ${pitchEdge.toFixed(3)}°)` : 'timed out',
   );
-  check('drawn horn tips match the kinematics at the edge', (await hornTipError()) < 1e-6);
+  probe = await hook('probeCollisions');
+  check('real mesh gaps at the pitch edge stay above 0.25 mm', probe.minMm >= 0.25, `${probe.minMm.toFixed(3)} mm (${probe.between})`);
   await shot('02-limited-pitch');
 
-  s = await setTargetAndSettle({ pitchDeg: 0, rollDeg: 0, heaveMm: 0 });
-  check('returns home when asked', !!s && atHome(s) && s.output.status === 'ok');
+  s = await setTargetAndSettle(neutral);
+  check('returns to neutral when asked', !!s && near(s.output.pose, neutral) && s.output.status === 'ok');
 
-  await page.evaluate(() => window.__peeqo.playAnimation('look-up'));
-  s = await waitFor((x) => x.output.pose.pitchDeg > 6.5, 4000);
-  check('2019 "look-up" tilts the face up', !!s, s ? `pitch ${s.output.pose.pitchDeg.toFixed(2)}°` : 'timed out');
+  // Randomised: many safe poses across the range, each checked against the real meshes.
+  let rng = 12345;
+  const rand = () => ((rng = (rng * 1103515245 + 12345) % 2147483648) / 2147483648);
+  let worst = { margin: Infinity, detail: '' };
+  let edges = 0;
+  for (let n = 0; n < 24; n++) {
+    const target = { pitchDeg: neutral.pitchDeg + (rand() - 0.5) * 30, rollDeg: neutral.rollDeg + (rand() - 0.5) * 30, heaveMm: neutral.heaveMm + (rand() - 0.5) * 10 };
+    s = await setTargetAndSettle(target, 8000);
+    if (!s) {
+      check(`random pose ${n} settles`, false);
+      continue;
+    }
+    if (s.output.status === 'limited') edges++;
+    table = await hook('tableClearance');
+    probe = await hook('probeCollisions');
+    const margin = probe.minMm - Math.max(0.25, Math.min(table.minMm, verifiedMm) - 0.25);
+    if (margin < worst.margin) worst = { margin, detail: `pose ${JSON.stringify(s.output.pose)}: measured ${probe.minMm.toFixed(3)} mm (${probe.between}), tables ${table.minMm.toFixed(3)} mm (${table.between})` };
+  }
+  check('at 24 random poses (many at the safe edge) real gaps never fall below what the core promises', worst.margin >= 0, `${edges} at the edge; tightest: ${worst.detail}`);
+
+  await setTargetAndSettle(neutral);
+  await hook('playAnimation', 'look-up');
+  s = await waitFor((x) => x.output.pose.pitchDeg > neutral.pitchDeg + 2, 4000);
+  check('2019 "look-up" tilts the face up from neutral', !!s, s ? `pitch ${s.output.pose.pitchDeg.toFixed(2)}°` : 'timed out');
   await shot('03-look-up');
-  s = await waitFor((x) => x.playing === null && atHome(x), 6000);
-  check('"look-up" finishes and returns home', !!s);
+  s = await waitFor((x) => x.playing === null && near(x.output.pose, neutral), 6000);
+  check('"look-up" finishes and returns to neutral', !!s);
 
-  await page.evaluate(() => window.__peeqo.playAnimation('jiggle'));
-  s = await waitFor((x) => Math.abs(x.output.pose.rollDeg) > 3, 4000);
+  await hook('playAnimation', 'jiggle');
+  s = await waitFor((x) => Math.abs(x.output.pose.rollDeg - neutral.rollDeg) > 1.5, 4000);
   check('2019 "jiggle" rolls the head', !!s, s ? `roll ${s.output.pose.rollDeg.toFixed(2)}°` : 'timed out');
-  await waitFor((x) => x.playing === null && atHome(x), 6000);
+  await waitFor((x) => x.playing === null && near(x.output.pose, neutral), 6000);
 
-  await page.evaluate(() => window.__peeqo.react('wakeword'));
-  s = await waitFor((x) => x.litLeds.length >= 4 && x.output.pose.heaveMm > 2, 4000);
-  check('"wakeword" reaction: LED circle and alert rise together', !!s, s ? `LEDs ${s.litLeds.join(',')}, heave ${s.output.pose.heaveMm.toFixed(2)} mm` : 'timed out');
+  await hook('react', 'wakeword');
+  s = await waitFor((x) => x.litLeds.length >= 4 && x.output.pose.heaveMm > neutral.heaveMm + 1, 4000);
+  check('"wakeword": LED circle and alert rise together', !!s, s ? `LEDs ${s.litLeds.join(',')}, heave ${s.output.pose.heaveMm.toFixed(2)} mm` : 'timed out');
   await shot('04-wakeword');
-  await waitFor((x) => x.playing === null && atHome(x) && x.litLeds.length === 0, 6000);
+  await waitFor((x) => x.playing === null && near(x.output.pose, neutral) && x.litLeds.length === 0, 6000);
 
-  await page.evaluate(() => window.__peeqo.playLeds('on', 'purple'));
+  await hook('playLeds', 'on', 'purple');
   s = await waitFor((x) => x.litLeds.length === 12, 2000);
   check('LED ring shows all 12 LEDs', !!s);
-  await page.evaluate(() => window.__peeqo.setView('top'));
+  await hook('setView', 'top');
   await page.waitForTimeout(300);
   await shot('05-leds-top');
-  await page.evaluate(() => window.__peeqo.playLeds('off', 'red'));
+  await hook('playLeds', 'off', 'red');
 
-  await page.evaluate(() => window.__peeqo.setView('face'));
+  await hook('setView', 'face');
   await page.waitForTimeout(300);
   s = await state();
   check('eyes are open at rest', s.eyes.rx === 87.5);
   await shot('06-face');
 
-  await page.evaluate(() => window.__peeqo.setView('neck'));
-  s = await setTargetAndSettle({ pitchDeg: -3, rollDeg: 3, heaveMm: 2 });
-  check(
-    'reaches a safe compound pose exactly',
-    !!s && s.output.status === 'ok' && Math.abs(s.output.pose.pitchDeg + 3) < 1e-4 && Math.abs(s.output.pose.rollDeg - 3) < 1e-4 && Math.abs(s.output.pose.heaveMm - 2) < 1e-4,
-  );
-  check('drawn horn tips match the kinematics in a compound pose', (await hornTipError()) < 1e-6);
+  await hook('setView', 'neck');
+  const compound = { pitchDeg: neutral.pitchDeg - 1.5, rollDeg: neutral.rollDeg + 1.5, heaveMm: neutral.heaveMm + 0.5 };
+  s = await setTargetAndSettle(compound);
+  check('reaches a safe compound pose exactly', !!s && s.output.status === 'ok' && near(s.output.pose, compound, 1e-4));
+  check('drawn horn tips match the kinematics in a compound pose', (await hook('hornTipError')) < 1e-6);
+  check('drawn legs reach their ball joints in a compound pose', (await hook('legTopError')) < 0.25, `${(await hook('legTopError')).toFixed(3)} mm`);
   await page.waitForTimeout(200);
   await shot('07-neck');
 
-  await page.evaluate(() => window.__peeqo.setView('three-quarter'));
-  s = await setTargetAndSettle({ pitchDeg: 0, rollDeg: 15, heaveMm: 0 });
+  await hook('setView', 'three-quarter');
+  const rollTarget = { ...neutral, rollDeg: 15 };
+  const rollEdge = (await hook('safeEdge', rollTarget)).rollDeg;
+  s = await setTargetAndSettle(rollTarget);
   check(
     'unsafe request (roll 15°) is held at the safe edge',
-    !!s && s.output.status === 'limited' && s.output.pose.rollDeg > 4 && s.output.pose.rollDeg < 4.3,
-    s ? `roll ${s.output.pose.rollDeg.toFixed(3)}°` : 'timed out',
+    !!s && s.output.status === 'limited' && Math.abs(s.output.pose.rollDeg - rollEdge) < 1e-3,
+    s ? `roll ${s.output.pose.rollDeg.toFixed(3)}° (edge ${rollEdge.toFixed(3)}°)` : 'timed out',
   );
   await shot('08-limited-roll');
 } catch (error) {

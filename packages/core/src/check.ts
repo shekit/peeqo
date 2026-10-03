@@ -1,4 +1,6 @@
-import { PEEQO_2019_GEOMETRY, type PlatformGeometry } from './geometry.ts';
+import { legJoints, type ClearanceModel, type ClearanceReading, type LegJoints } from './clearance.ts';
+import { DEFAULT_CLEARANCE } from './devKit.ts';
+import { DEFAULT_GEOMETRY, type PlatformGeometry } from './geometry.ts';
 import { shaftAxis, solveIk, type IkSolution, type Pose } from './kinematics.ts';
 import {
   RAD_TO_DEG,
@@ -7,7 +9,6 @@ import {
   length,
   mapTriple,
   mulMat3Vec3,
-  sub,
   type ServoIndex,
   type Triple,
 } from './math.ts';
@@ -19,7 +20,8 @@ export type ViolationKind =
   | 'unreachable'
   | 'near-singular'
   | 'horn-range'
-  | 'joint-tilt';
+  | 'rod-end-tilt'
+  | 'collision';
 
 export interface Violation {
   readonly kind: ViolationKind;
@@ -27,6 +29,8 @@ export interface Violation {
   readonly servo: ServoIndex | null;
   readonly value: number;
   readonly limit: number;
+  /** For collisions: which parts. */
+  readonly between?: string;
 }
 
 export interface PoseCheck {
@@ -34,15 +38,23 @@ export interface PoseCheck {
   readonly ik: IkSolution;
   /** Horn angles in degrees (+ = tip up); NaN where a leg cannot reach. */
   readonly hornDeg: Triple;
-  /** Ball-joint tilt out of the plane square to its stud, degrees: lower = horn end, upper = platform end. */
-  readonly jointTiltDeg: { readonly lower: Triple; readonly upper: Triple };
+  /**
+   * How far each top rod end is tilted off its screw, degrees. The leg turns only about its pin (parallel to
+   * its servo shaft), so the rod end's eye keeps that direction; the ball's screw is fixed to the platform and
+   * turns with it. Turning about the screw is free; tilting off it is limited by the eye meeting the lugs.
+   */
+  readonly rodEndTiltDeg: Triple;
+  /** Joint values of each leg (only when every leg can reach). */
+  readonly joints: Triple<LegJoints> | null;
+  /** Smallest guaranteed gap between any two parts, from the CAD collision tables (null if not checked). */
+  readonly clearance: ClearanceReading | null;
   readonly violations: readonly Violation[];
 }
 
-function tiltDeg(legDirection: readonly [number, number, number], studAxis: readonly [number, number, number]): number {
-  const len = length(legDirection);
-  if (!(len > 0)) return Number.NaN;
-  return Math.asin(Math.min(1, Math.abs(dot(legDirection, studAxis)) / len)) * RAD_TO_DEG;
+/** Angle between two unit vectors, degrees (atan2 form, accurate for small angles). */
+function angleBetweenDeg(a: readonly [number, number, number], b: readonly [number, number, number]): number {
+  const cross = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]] as const;
+  return Math.atan2(length(cross), dot(a, b)) * RAD_TO_DEG;
 }
 
 /**
@@ -51,9 +63,13 @@ function tiltDeg(legDirection: readonly [number, number, number], studAxis: read
  */
 export function checkPose(
   pose: Pose,
-  geometry: PlatformGeometry = PEEQO_2019_GEOMETRY,
+  geometry: PlatformGeometry = DEFAULT_GEOMETRY,
   limits: SafetyLimits = DEFAULT_SAFETY_LIMITS,
+  clearance: ClearanceModel | null = DEFAULT_CLEARANCE,
 ): PoseCheck {
+  if (clearance && !clearance.fits(geometry)) {
+    throw new Error('The collision tables were made for a different geometry; pass the matching tables or null.');
+  }
   const violations: Violation[] = [];
   const finite = Number.isFinite(pose.pitchDeg) && Number.isFinite(pose.rollDeg) && Number.isFinite(pose.heaveMm);
   if (!finite) violations.push({ kind: 'non-finite', servo: null, value: Number.NaN, limit: 0 });
@@ -71,15 +87,9 @@ export function checkPose(
 
   const ik = solveIk(pose, geometry);
   const hornDeg = mapTriple(ik.legs, (leg) => leg.hornRad * RAD_TO_DEG);
-  const lower = mapTriple(SERVO_INDICES, (servo) => {
-    const leg = ik.legs[servo];
-    return tiltDeg(sub(leg.platformJoint, leg.hornTip), shaftAxis(servo, geometry));
-  });
-  const upper = mapTriple(SERVO_INDICES, (servo) => {
-    const leg = ik.legs[servo];
-    // Assumes each upper stud is fitted parallel to its servo's shaft when the platform is level.
-    const stud = mulMat3Vec3(ik.rotation, shaftAxis(servo, geometry));
-    return tiltDeg(sub(leg.platformJoint, leg.hornTip), stud);
+  const rodEndTiltDeg = mapTriple(SERVO_INDICES, (servo) => {
+    const eyeAxis = shaftAxis(servo, geometry);
+    return angleBetweenDeg(eyeAxis, mulMat3Vec3(ik.rotation, eyeAxis));
   });
 
   for (const servo of SERVO_INDICES) {
@@ -94,13 +104,24 @@ export function checkPose(
     const horn = hornDeg[servo];
     if (horn < limits.hornMinDeg) violations.push({ kind: 'horn-range', servo, value: horn, limit: limits.hornMinDeg });
     if (horn > limits.hornMaxDeg) violations.push({ kind: 'horn-range', servo, value: horn, limit: limits.hornMaxDeg });
-    const worstTilt = Math.max(lower[servo], upper[servo]);
-    if (worstTilt > limits.maxJointTiltDeg) {
-      violations.push({ kind: 'joint-tilt', servo, value: worstTilt, limit: limits.maxJointTiltDeg });
+    if (rodEndTiltDeg[servo] > limits.maxRodEndTiltDeg) {
+      violations.push({ kind: 'rod-end-tilt', servo, value: rodEndTiltDeg[servo], limit: limits.maxRodEndTiltDeg });
     }
   }
 
-  return { ok: violations.length === 0, ik, hornDeg, jointTiltDeg: { lower, upper }, violations };
+  let joints: Triple<LegJoints> | null = null;
+  let reading: ClearanceReading | null = null;
+  if (ik.reachable && finite) {
+    joints = legJoints(ik, geometry);
+    if (clearance) {
+      reading = clearance.read(pose, joints);
+      if (!(reading.minMm >= clearance.marginMm)) {
+        violations.push({ kind: 'collision', servo: null, value: reading.minMm, limit: clearance.marginMm, between: reading.between });
+      }
+    }
+  }
+
+  return { ok: violations.length === 0, ik, hornDeg, rodEndTiltDeg, joints, clearance: reading, violations };
 }
 
 /** One short line naming what is wrong, grouped by kind (e.g. "leg can't reach (servos 1, 2)"). */
@@ -111,9 +132,11 @@ export function summarizeViolations(violations: readonly Violation[]): string {
     unreachable: "leg can't reach",
     'near-singular': 'horn and leg nearly in line',
     'horn-range': 'horn past its limit',
-    'joint-tilt': 'ball joint tilted too far',
+    'rod-end-tilt': 'rod end tilted too far',
+    collision: 'parts too close',
   };
   const servosByKind = new Map<ViolationKind, Set<number>>();
+  const collisions = [...new Set(violations.filter((v) => v.kind === 'collision').map((v) => v.between ?? 'unknown parts'))];
   for (const v of violations) {
     const set = servosByKind.get(v.kind) ?? new Set<number>();
     if (v.servo !== null) set.add(v.servo);
@@ -122,6 +145,7 @@ export function summarizeViolations(violations: readonly Violation[]): string {
   return [...servosByKind]
     .map(([kind, servos]) => {
       const list = [...servos].sort();
+      if (kind === 'collision') return `${labels[kind]} (${collisions.join('; ')})`;
       if (list.length === 0) return labels[kind];
       return `${labels[kind]} (servo${list.length > 1 ? 's' : ''} ${list.join(', ')})`;
     })
@@ -143,8 +167,12 @@ export function describeViolations(violations: readonly Violation[]): string[] {
         return `${who}: horn and leg nearly in line (${v.value.toFixed(3)} > ${v.limit})`;
       case 'horn-range':
         return `${who}: horn ${v.value.toFixed(1)}° outside ${v.limit.toFixed(1)}°`;
-      case 'joint-tilt':
-        return `${who}: ball joint tilted ${v.value.toFixed(1)}° > ${v.limit}°`;
+      case 'rod-end-tilt':
+        return `${who}: rod end tilted ${v.value.toFixed(1)}° > ${v.limit}°`;
+      case 'collision':
+        return Number.isFinite(v.value)
+          ? `${v.between}: ${v.value.toFixed(2)} mm apart, need ${v.limit} mm`
+          : `${v.between ?? 'collision'}: not covered by the collision check`;
     }
   });
 }

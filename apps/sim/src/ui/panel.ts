@@ -1,12 +1,12 @@
 import {
   CLASSIC_LED_ANIMATIONS,
   CLASSIC_LED_COLORS,
-  HOME_POSE,
   SERVO_TO_CHANNEL,
   hornDegToPulseUs,
   isClassicLedColor,
   type ClassicLedAnimation,
   type ClassicLedColor,
+  type ClearanceReading,
   type GovernorOutput,
   type PlatformGeometry,
   type Pose,
@@ -33,11 +33,13 @@ export interface PanelOptions {
   readonly reactions: readonly string[];
   readonly glasses: readonly string[];
   readonly initialGlasses: string | null;
+  /** The governor's neutral pose: where "Neutral" goes and the sliders start. */
+  readonly neutral: Pose;
 }
 
 export interface Panel {
   /** Refreshes readouts; call once per frame. */
-  update(output: GovernorOutput, playing: string | null): void;
+  update(output: GovernorOutput, playing: string | null, clearance: ClearanceReading | null): void;
   /** Moves the sliders to show a target (without triggering onTarget). */
   showTarget(pose: Pose): void;
 }
@@ -77,11 +79,12 @@ export function createPanel(host: HTMLElement, options: PanelOptions, callbacks:
     { key: 'heaveMm', label: 'Height', unit: ' mm', min: limits.minHeaveMm, max: limits.maxHeaveMm },
   ] as const;
   const sliders = new Map<keyof Pose, { input: HTMLInputElement; target: HTMLElement; actual: HTMLElement }>();
-  const target: { -readonly [K in keyof Pose]: number } = { ...HOME_POSE };
+  const target: { -readonly [K in keyof Pose]: number } = { ...options.neutral };
   const rows = axes.map((axis) => {
-    const input = el('input', { type: 'range', min: axis.min, max: axis.max, step: 0.1, value: 0, 'aria-label': axis.label });
-    const targetText = el('span', { class: 'mono', text: `0.0${axis.unit}` });
-    const actualText = el('span', { class: 'mono muted', text: `0.0${axis.unit}` });
+    const start = options.neutral[axis.key];
+    const input = el('input', { type: 'range', min: axis.min, max: axis.max, step: 0.1, value: start, 'aria-label': axis.label });
+    const targetText = el('span', { class: 'mono', text: `${fmt(start)}${axis.unit}` });
+    const actualText = el('span', { class: 'mono muted', text: `${fmt(start)}${axis.unit}` });
     input.addEventListener('input', () => {
       target[axis.key] = Number(input.value);
       targetText.textContent = `${fmt(target[axis.key])}${axis.unit}`;
@@ -95,14 +98,15 @@ export function createPanel(host: HTMLElement, options: PanelOptions, callbacks:
       input,
     );
   });
-  const home = el('button', { type: 'button', text: 'Home' });
-  home.addEventListener('click', () => callbacks.onTarget({ ...HOME_POSE }));
+  const home = el('button', { type: 'button', text: 'Neutral' });
+  home.addEventListener('click', () => callbacks.onTarget({ ...options.neutral }));
   host.append(section('Head pose (target → actual)', ...rows, el('div', { class: 'row' }, home)));
 
   // ---- safe range ----
   const plotCanvas = el('canvas', { class: 'envelope', width: 480, height: 480 });
   const plot = new EnvelopePlot(plotCanvas, options.geometry, limits);
   const notes = el('ul', { class: 'notes' });
+  const clearanceText = el('p', { class: 'clearance mono' });
   const ghostToggle = el('input', { type: 'checkbox', checked: true });
   ghostToggle.addEventListener('change', () => callbacks.onShowRequested(ghostToggle.checked));
   host.append(
@@ -111,6 +115,7 @@ export function createPanel(host: HTMLElement, options: PanelOptions, callbacks:
       plotCanvas,
       el('p', { class: 'legend' }, el('span', { class: 'swatch safe' }), ' safe  ○ requested  ◆ goal  ● now'),
       el('label', { class: 'check' }, ghostToggle, ' Show requested pose in red when it is unsafe'),
+      clearanceText,
       notes,
     ),
   );
@@ -130,7 +135,7 @@ export function createPanel(host: HTMLElement, options: PanelOptions, callbacks:
       el(
         'table',
         { class: 'servos' },
-        el('thead', {}, el('tr', {}, el('th', { text: 'Ch' }), el('th', { text: '' }), el('th', { text: 'Horn' }), el('th', { text: 'Pulse' }), el('th', { text: `${limits.hornMinDeg}° … ${limits.hornMaxDeg}°` }))),
+        el('thead', {}, el('tr', {}, el('th', { text: 'Ch' }), el('th', { text: '' }), el('th', { text: 'Horn' }), el('th', { text: 'Pulse (2019 map)', title: 'The 2019 pulse mapping; the dev kit servos still need calibrating' }), el('th', { text: `${limits.hornMinDeg}° … ${limits.hornMaxDeg}°` }))),
         el('tbody', {}, ...servoRows.map((r) => r.tr)),
       ),
     ),
@@ -190,7 +195,7 @@ export function createPanel(host: HTMLElement, options: PanelOptions, callbacks:
     el(
       'footer',
       {},
-      el('p', { text: 'Neck geometry: 2019 ServoSimulator values (not yet measured on the dev kit). Head: 2016 v1 CAD as a stand-in. LED order and servo left/right are assumptions to confirm on the robot.' }),
+      el('p', { text: 'Model, neck geometry and collision checks: the dev kit Fusion 360 assembly (every pose keeps all parts at least 0.5 mm apart). To confirm on the robot: servo calibration (pulse to angle), which PCA9685 channel drives which rear servo, and where LED 0 sits.' }),
     ),
   );
 
@@ -205,7 +210,10 @@ export function createPanel(host: HTMLElement, options: PanelOptions, callbacks:
   };
 
   let lastNotes = '';
-  const update = (output: GovernorOutput, playing: string | null): void => {
+  const update = (output: GovernorOutput, playing: string | null, clearance: ClearanceReading | null): void => {
+    clearanceText.textContent = clearance
+      ? `Closest parts: ${Number.isFinite(clearance.minMm) ? clearance.minMm.toFixed(2) : '—'} mm (${clearance.between})`
+      : 'Collision check: off';
     status.className = `status ${output.status}`;
     status.textContent = output.status === 'ok' ? 'SAFE' : output.status === 'limited' ? 'LIMITED' : 'BLOCKED';
     for (const axis of axes) {

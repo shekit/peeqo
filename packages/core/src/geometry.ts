@@ -12,9 +12,9 @@ export interface PlatformGeometry {
   readonly baseRadiusMm: number;
   /** Distance from the platform centre to each leg's upper ball joint. */
   readonly platformRadiusMm: number;
-  /** Horn length, from the shaft axis to the horn's ball joint. */
+  /** Horn length, from the shaft axis to the horn's joint with the leg. */
   readonly hornLengthMm: number;
-  /** Leg length, between its two ball joints. */
+  /** Leg length, from the horn joint to the upper ball joint. */
   readonly legLengthMm: number;
   /** Height of the upper ball joints above the shaft plane at the home pose. */
   readonly homeHeightMm: number;
@@ -27,10 +27,27 @@ export interface PlatformGeometry {
 }
 
 /**
- * The geometry in the 2019 ServoSimulator (ServoSimulator/Platform.pde, under "REAL MEASUREMENTS"), which
- * recorded every 2019 servo animation. Not yet checked against a physical dev kit.
+ * The 2019 dev kit, measured from its Fusion 360 assembly (peeqo-assembly.stp): servo shafts 27.32 mm from
+ * the centre and 42 mm above the table; legs pinned to the custom horns 7 mm from the shaft; ball joints
+ * 34.32 mm from the centre and 100.1 mm above the table. At home every horn is level and every leg vertical.
+ * apps/sim/tools/build-model.mjs re-measures these from the CAD and fails if they drift.
  */
-export const PEEQO_2019_GEOMETRY: PlatformGeometry = Object.freeze<PlatformGeometry>({
+export const DEV_KIT_GEOMETRY: PlatformGeometry = Object.freeze<PlatformGeometry>({
+  baseRadiusMm: 27.32,
+  platformRadiusMm: 34.32,
+  hornLengthMm: 7,
+  legLengthMm: 58.1,
+  homeHeightMm: 58.1,
+  baseAnglesDeg: [0, 120, 240],
+  platformAnglesDeg: [0, 120, 240],
+  hornAnglesDeg: [0, 120, 240],
+});
+
+/**
+ * The geometry in the 2019 ServoSimulator (ServoSimulator/Platform.pde), which recorded the 2019 servo
+ * animations. It is a different, larger neck than the dev kit; kept to decode and test against that sketch.
+ */
+export const SERVO_SIMULATOR_2019_GEOMETRY: PlatformGeometry = Object.freeze<PlatformGeometry>({
   baseRadiusMm: 65,
   platformRadiusMm: 85,
   hornLengthMm: 13,
@@ -40,3 +57,6 @@ export const PEEQO_2019_GEOMETRY: PlatformGeometry = Object.freeze<PlatformGeome
   platformAnglesDeg: [0, 120, 240],
   hornAnglesDeg: [0, 120, 240],
 });
+
+/** The geometry everything uses unless told otherwise: the real robot. */
+export const DEFAULT_GEOMETRY = DEV_KIT_GEOMETRY;

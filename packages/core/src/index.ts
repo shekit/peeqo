@@ -3,6 +3,8 @@ export * from './geometry.ts';
 export * from './kinematics.ts';
 export * from './limits.ts';
 export * from './check.ts';
+export * from './clearance.ts';
+export * from './devKit.ts';
 export * from './envelope.ts';
 export * from './governor.ts';
 export * from './player.ts';

@@ -2,10 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {
   SERVO_INDICES,
-  platformJointLocal,
   platformTransform,
-  shaftAxis,
-  shaftPoint,
   solveIk,
   type IkSolution,
   type LedPixel,
@@ -15,41 +12,37 @@ import {
   type Vec3,
 } from '@peeqo/core';
 import { FACE_HEIGHT, FACE_WIDTH } from '@peeqo/face';
-import headModelUrl from '../assets/peeqo-v1-head.glb?url';
+import modelUrl from '../assets/peeqo-devkit.glb?url';
 import { createLedRingMaterial } from './ledRingMaterial.ts';
 
-/**
- * Visual-only dimensions (mm). The kinematics come from PlatformGeometry; these only decide how the base,
- * servos and plate look. The head is the 2016 v1 CAD, standing in until the dev-kit CAD is available.
- */
-const BASE_RADIUS = 100;
-const BASE_HEIGHT = 26;
-/** Height of the servo shaft plane (the kinematics' origin) above the table. */
-export const SHAFT_PLANE_HEIGHT = BASE_HEIGHT + 16;
-const PLATE_BOTTOM = 4;
-const PLATE_TOP = 8;
-/** Micro servo (SG90/MG90S class) body: radial length, length along the shaft, height. */
-const SERVO_BODY = { radial: 22.5, alongShaft: 22.7, height: 12.2, shaftFromOuterEnd: 5.9 } as const;
-
-interface ScreenWindow {
-  frontXMm: number;
-  centerYMm: number;
-  centerZMm: number;
-  widthMm: number;
-  heightMm: number;
+/** Measurements stored in the model by tools/build-model.mjs (see that file for the body frames). */
+interface ModelInfo {
+  shaftHeightMm: number;
+  jointHeightMm: number;
+  legAnglesDeg: number[];
+  measured: Record<string, number>;
+  screenWindow: { frontXMm: number; centerYMm: number; centerZMm: number; widthMm: number; heightMm: number };
+  looseInCad: string[];
+  copies: string[];
 }
+
+export type BodyName = 'static' | 'horn-0' | 'horn-1' | 'horn-2' | 'leg-0' | 'leg-1' | 'leg-2' | 'platform';
 
 export interface RobotView {
   /** Add to the scene. Converts Peeqo's Z-up frame to three.js Y-up. */
   readonly root: THREE.Group;
   readonly faceTexture: THREE.CanvasTexture;
+  readonly info: ModelInfo;
+  /** The rigid bodies as drawn (each holds its parts as child meshes with userData.role). */
+  readonly bodies: Readonly<Record<BodyName, THREE.Object3D>>;
   /** Poses the mechanism: horns, legs, platform and head. Returns the IK used. */
   update(pose: Pose): IkSolution;
   /** Shows a red outline where the head was asked to go, or hides it (null). */
   setRequested(pose: Pose | null): void;
   setLeds(pixels: readonly LedPixel[]): void;
-  /** World-space horn tip positions as drawn, in Peeqo's frame (for consistency checks). */
+  /** Consistency checks for tests: where the drawn joints are, in the kinematics' frame (mm). */
   drawnHornTips(): Vec3[];
+  drawnLegTops(): Vec3[];
 }
 
 function matrixFromMat3(m: Mat3, position: Vec3): THREE.Matrix4 {
@@ -61,135 +54,122 @@ function matrixFromMat3(m: Mat3, position: Vec3): THREE.Matrix4 {
   );
 }
 
-/** A cylinder whose axis runs along +Z (three.js cylinders run along +Y). */
-function zCylinder(radiusTop: number, radiusBottom: number, height: number, segments = 48): THREE.CylinderGeometry {
-  const g = new THREE.CylinderGeometry(radiusTop, radiusBottom, height, segments);
-  g.rotateX(Math.PI / 2);
-  return g;
-}
-
-function mesh(geometry: THREE.BufferGeometry, material: THREE.Material, shadows = true): THREE.Mesh {
-  const m = new THREE.Mesh(geometry, material);
-  m.castShadow = shadows;
-  m.receiveShadow = shadows;
-  return m;
-}
-
 export async function createRobot(geometry: PlatformGeometry, faceCanvas: HTMLCanvasElement): Promise<RobotView> {
   if (faceCanvas.width !== FACE_WIDTH || faceCanvas.height !== FACE_HEIGHT) {
     throw new Error(`Face canvas must be ${FACE_WIDTH}×${FACE_HEIGHT}`);
   }
-  const materials = {
-    shell: new THREE.MeshStandardMaterial({ color: 0xdcdcd6, roughness: 0.55 }),
-    plate: new THREE.MeshStandardMaterial({ color: 0xc3c7cd, roughness: 0.6 }),
-    servo: new THREE.MeshStandardMaterial({ color: 0x2c2f34, roughness: 0.45 }),
-    bracket: new THREE.MeshStandardMaterial({ color: 0x9da3ab, roughness: 0.7 }),
-    horn: new THREE.MeshStandardMaterial({ color: 0xf3f3ef, roughness: 0.5 }),
-    leg: new THREE.MeshStandardMaterial({ color: 0xb9bfc7, metalness: 0.85, roughness: 0.3 }),
-    joint: new THREE.MeshStandardMaterial({ color: 0x4b5058, metalness: 0.3, roughness: 0.4 }),
-    ghost: new THREE.LineBasicMaterial({ color: 0xe5484d, transparent: true, opacity: 0.9 }),
+  const gltf = await new GLTFLoader().loadAsync(modelUrl);
+  const model = gltf.scene;
+  const info = model.userData as ModelInfo;
+  // The drawing must use the same neck as the maths, or the picture would lie about what is safe.
+  for (const key of ['baseRadiusMm', 'hornLengthMm', 'platformRadiusMm', 'legLengthMm', 'homeHeightMm'] as const) {
+    const measured = info.measured?.[key];
+    if (measured === undefined || Math.abs(measured - geometry[key]) > 0.01) {
+      throw new Error(`Robot model ${key} is ${measured} mm but the kinematics use ${geometry[key]} mm`);
+    }
+  }
+  // The dev kit is printed in black; the model keeps the CAD's light colours, so recolour them here (a dark
+  // charcoal rather than pure black, so the shapes still read in the lighting).
+  const recolour: Record<string, { color: string; roughness: number }> = {
+    shell: { color: '#2b2d31', roughness: 0.42 },
+    'printed-part': { color: '#313337', roughness: 0.48 },
+    plate: { color: '#45484e', roughness: 0.5 },
   };
+  model.traverse((o) => {
+    if (!(o instanceof THREE.Mesh) || !(o.material instanceof THREE.MeshStandardMaterial)) return;
+    const look = recolour[o.material.name];
+    if (look) {
+      o.material.color.set(look.color);
+      o.material.roughness = look.roughness;
+    }
+  });
+  const body = (name: BodyName): THREE.Object3D => {
+    const object = model.getObjectByName(name);
+    if (!object) throw new Error(`Robot model has no "${name}" body; rebuild it with tools/build-model.mjs`);
+    object.traverse((o) => {
+      if (o instanceof THREE.Mesh) {
+        o.castShadow = true;
+        o.receiveShadow = true;
+      }
+    });
+    return object;
+  };
+  const bodies = {
+    static: body('static'),
+    'horn-0': body('horn-0'),
+    'horn-1': body('horn-1'),
+    'horn-2': body('horn-2'),
+    'leg-0': body('leg-0'),
+    'leg-1': body('leg-1'),
+    'leg-2': body('leg-2'),
+    platform: body('platform'),
+  } satisfies Record<BodyName, THREE.Object3D>;
 
   // Peeqo's frame (+X forward, +Y left, +Z up) inside three.js (+Y up): rotate −90° about X.
   const root = new THREE.Group();
   root.name = 'peeqo';
   root.rotation.x = -Math.PI / 2;
+  root.add(bodies.static);
 
-  // ---- base ----
-  const base = mesh(zCylinder(BASE_RADIUS, BASE_RADIUS + 2, BASE_HEIGHT, 96), materials.shell);
-  base.position.z = BASE_HEIGHT / 2;
-  root.add(base);
-
-  // Everything kinematic lives in this group, whose origin is the shaft plane centre (the core's origin).
+  // The kinematics' origin: centre of the servo shaft plane.
   const mechanism = new THREE.Group();
-  mechanism.position.z = SHAFT_PLANE_HEIGHT;
+  mechanism.position.z = info.shaftHeightMm;
   root.add(mechanism);
 
-  // ---- servos and horns ----
   const hornPivots: THREE.Group[] = [];
-  const hornTipMarkers: THREE.Object3D[] = [];
-  for (const servo of SERVO_INDICES) {
-    const beta = THREE.MathUtils.degToRad(geometry.hornAnglesDeg[servo]);
-    const radial = new THREE.Vector3(Math.cos(beta), Math.sin(beta), 0);
-    const axis = new THREE.Vector3(...shaftAxis(servo, geometry));
-    const up = new THREE.Vector3(0, 0, 1);
-    // Local frame: x = horn direction when level, y = shaft axis, z = up.
+  const hornTips: THREE.Object3D[] = [];
+  const legLinks: THREE.Group[] = [];
+  const legTops: THREE.Object3D[] = [];
+  const legYaw: number[] = [];
+  for (const k of SERVO_INDICES) {
+    const yaw = THREE.MathUtils.degToRad(geometry.baseAnglesDeg[k]);
+    legYaw.push(yaw);
     const frame = new THREE.Group();
-    frame.position.set(...shaftPoint(servo, geometry));
-    frame.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(radial, axis, up));
+    frame.rotation.z = yaw;
     mechanism.add(frame);
-
-    const bodyX = -(SERVO_BODY.radial / 2 - SERVO_BODY.shaftFromOuterEnd);
-    const bodyY = -4 - SERVO_BODY.alongShaft / 2;
-    const body = mesh(new THREE.BoxGeometry(SERVO_BODY.radial, SERVO_BODY.alongShaft, SERVO_BODY.height), materials.servo);
-    body.position.set(bodyX, bodyY, 0);
-    const tabs = mesh(new THREE.BoxGeometry(SERVO_BODY.radial + 9.7, 2.5, SERVO_BODY.height), materials.servo);
-    tabs.position.set(bodyX, -8.5, 0);
-    const bracketHeight = SHAFT_PLANE_HEIGHT - BASE_HEIGHT - SERVO_BODY.height / 2;
-    const bracket = mesh(new THREE.BoxGeometry(SERVO_BODY.radial, SERVO_BODY.alongShaft, bracketHeight), materials.bracket);
-    bracket.position.set(bodyX, bodyY, -SERVO_BODY.height / 2 - bracketHeight / 2);
-    const spline = mesh(new THREE.CylinderGeometry(2.4, 2.4, 3, 20), materials.horn);
-    spline.position.set(0, -2.5, 0);
-    frame.add(body, tabs, bracket, spline);
-
-    // The horn turns about the shaft (local y); + angle lifts its tip.
+    // Horn body: the U-horn with the servo hubs screwed to it; turns about the shaft (local +Y) only.
     const pivot = new THREE.Group();
-    frame.add(pivot);
-    const arm = mesh(new THREE.BoxGeometry(geometry.hornLengthMm + 7, 2, 5), materials.horn);
-    arm.position.x = (geometry.hornLengthMm + 7) / 2 - 4;
-    const hub = mesh(new THREE.CylinderGeometry(3.6, 3.6, 2.4, 24), materials.horn);
-    const tip = mesh(new THREE.SphereGeometry(3, 20, 14), materials.joint);
+    pivot.position.x = geometry.baseRadiusMm;
+    pivot.add(bodies[`horn-${k}`]);
+    const tip = new THREE.Object3D();
     tip.position.x = geometry.hornLengthMm;
-    pivot.add(arm, hub, tip);
+    pivot.add(tip);
+    frame.add(pivot);
+    // Leg body: both arms and the rod-end eye; swings about its pin (local +Y), staying in this leg's plane.
+    const link = new THREE.Group();
+    link.add(bodies[`leg-${k}`]);
+    const top = new THREE.Object3D();
+    top.position.z = geometry.legLengthMm;
+    link.add(top);
+    frame.add(link);
     hornPivots.push(pivot);
-    hornTipMarkers.push(tip);
+    hornTips.push(tip);
+    legLinks.push(link);
+    legTops.push(top);
   }
 
-  // ---- legs (re-aimed every frame) ----
-  const legs = SERVO_INDICES.map(() => {
-    const leg = mesh(new THREE.CylinderGeometry(1.6, 1.6, 1, 16), materials.leg);
-    mechanism.add(leg);
-    return leg;
-  });
-
-  // ---- platform, head and face ----
+  // ---- platform: plates, head, top, LED ring, rod-end balls and screws, and the face screen ----
   const platform = new THREE.Group();
   platform.matrixAutoUpdate = false;
   mechanism.add(platform);
-  for (const servo of SERVO_INDICES) {
-    const joint = platformJointLocal(servo, geometry);
-    const ball = mesh(new THREE.SphereGeometry(3.2, 20, 14), materials.joint);
-    ball.position.set(...joint);
-    const stud = mesh(zCylinder(1.5, 1.5, PLATE_BOTTOM, 16), materials.joint);
-    stud.position.set(joint[0], joint[1], PLATE_BOTTOM / 2);
-    platform.add(ball, stud);
-  }
-  const plateRadius = geometry.platformRadiusMm + 7;
-  const plate = mesh(zCylinder(plateRadius, plateRadius, PLATE_TOP - PLATE_BOTTOM, 96), materials.plate);
-  plate.position.z = (PLATE_TOP + PLATE_BOTTOM) / 2;
-  platform.add(plate);
-
-  const gltf = await new GLTFLoader().loadAsync(headModelUrl);
-  const head = gltf.scene;
-  const screen = head.userData.screenWindow as ScreenWindow | undefined;
-  if (!screen || !(screen.widthMm > 0) || !(screen.heightMm > 0)) throw new Error('Head model has no screen window measurements');
-  head.position.z = PLATE_TOP;
-  head.traverse((object) => {
-    if (object instanceof THREE.Mesh) {
-      object.castShadow = true;
-      object.receiveShadow = true;
-    }
+  // Head outline for the "requested pose" ghost, measured before attaching so it is in the platform frame.
+  const headBox = new THREE.Box3();
+  bodies.platform.updateWorldMatrix(true, true);
+  bodies.platform.traverse((o) => {
+    if (o instanceof THREE.Mesh && /^(head|top-head|top-platform)/.test(o.name)) headBox.expandByObject(o, true);
   });
-  const diffuser = head.getObjectByName('led-diffuser');
-  if (!(diffuser instanceof THREE.Mesh)) throw new Error('Head model has no LED diffuser');
+  platform.add(bodies.platform);
+  let ring: THREE.Mesh | null = null;
+  bodies.platform.traverse((o) => {
+    if (o instanceof THREE.Mesh && o.userData.role === 'led-ring') ring = o;
+  });
+  if (!ring) throw new Error('Robot model has no LED ring');
   const ledRing = createLedRingMaterial();
-  diffuser.material = ledRing.material;
-  diffuser.castShadow = false;
-  // Measured before the head is attached, so the box is in the platform's frame.
-  const headBox = new THREE.Box3().setFromObject(head, true);
-  platform.add(head);
+  (ring as THREE.Mesh).material = ledRing.material;
+  (ring as THREE.Mesh).castShadow = false;
 
-  // Screen: an 800×480 (5:3) panel filling the window's width, on a black backing that fills the opening.
+  // Screen: the 800×480 (5:3) panel fitted to the bezel opening, on a black backing.
+  const screen = info.screenWindow;
   const faceTexture = new THREE.CanvasTexture(faceCanvas);
   faceTexture.colorSpace = THREE.SRGBColorSpace;
   faceTexture.anisotropy = 4;
@@ -197,7 +177,7 @@ export async function createRobot(geometry: PlatformGeometry, faceCanvas: HTMLCa
   const facing = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0));
   const backing = new THREE.Mesh(new THREE.PlaneGeometry(screen.widthMm, screen.heightMm), new THREE.MeshBasicMaterial({ color: 0x050505 }));
   backing.quaternion.setFromRotationMatrix(facing);
-  backing.position.set(screen.frontXMm - 3, screen.centerYMm, screen.centerZMm);
+  backing.position.set(screen.frontXMm - 2.4, screen.centerYMm, screen.centerZMm);
   const displayHeight = Math.min(screen.heightMm, (screen.widthMm * FACE_HEIGHT) / FACE_WIDTH);
   const displayWidth = (displayHeight * FACE_WIDTH) / FACE_HEIGHT;
   const display = new THREE.Mesh(
@@ -206,45 +186,39 @@ export async function createRobot(geometry: PlatformGeometry, faceCanvas: HTMLCa
   );
   display.name = 'face-display';
   display.quaternion.setFromRotationMatrix(facing);
-  display.position.set(screen.frontXMm - 2.9, screen.centerYMm, screen.centerZMm);
-  head.add(backing, display);
+  display.position.set(screen.frontXMm - 2.3, screen.centerYMm, screen.centerZMm);
+  platform.add(backing, display);
 
   // ---- ghost: where the head was asked to go when that is outside the safe range ----
   const ghost = new THREE.Group();
   ghost.matrixAutoUpdate = false;
   ghost.visible = false;
-  const headSize = headBox.getSize(new THREE.Vector3());
-  const headCenter = headBox.getCenter(new THREE.Vector3());
-  const outline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(headSize.x, headSize.y, headSize.z)), materials.ghost);
-  outline.position.copy(headCenter);
-  const ring = new THREE.LineLoop(
-    new THREE.BufferGeometry().setFromPoints(
-      Array.from({ length: 96 }, (_, i) => {
-        const a = (i / 96) * Math.PI * 2;
-        return new THREE.Vector3(Math.cos(a) * plateRadius, Math.sin(a) * plateRadius, PLATE_TOP);
-      }),
-    ),
-    materials.ghost,
+  const size = headBox.getSize(new THREE.Vector3());
+  const outline = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(size.x, size.y, size.z)),
+    new THREE.LineBasicMaterial({ color: 0xe5484d, transparent: true, opacity: 0.9 }),
   );
-  ghost.add(outline, ring);
+  outline.position.copy(headBox.getCenter(new THREE.Vector3()));
+  ghost.add(outline);
   mechanism.add(ghost);
 
-  const up = new THREE.Vector3(0, 1, 0);
+  const toLegFrame = (v: Vec3, yaw: number): THREE.Vector3 => new THREE.Vector3(...v).applyAxisAngle(new THREE.Vector3(0, 0, 1), -yaw);
+
   const update = (pose: Pose): IkSolution => {
     const ik = solveIk(pose, geometry);
     if (!ik.reachable) throw new Error('RobotView.update was given an unreachable pose; only governor output may be drawn');
     platform.matrix.copy(matrixFromMat3(ik.rotation, ik.position));
     platform.matrixWorldNeedsUpdate = true;
-    for (const servo of SERVO_INDICES) {
-      const leg = ik.legs[servo];
-      hornPivots[servo]!.rotation.y = -leg.hornRad;
-      const a = new THREE.Vector3(...leg.hornTip);
-      const b = new THREE.Vector3(...leg.platformJoint);
-      const along = b.clone().sub(a);
-      const legMesh = legs[servo]!;
-      legMesh.position.copy(a).addScaledVector(along, 0.5);
-      legMesh.scale.set(1, along.length(), 1);
-      legMesh.quaternion.setFromUnitVectors(up, along.normalize());
+    for (const k of SERVO_INDICES) {
+      const solution = ik.legs[k];
+      const yaw = legYaw[k]!;
+      hornPivots[k]!.rotation.y = -solution.hornRad;
+      // The leg hangs from the horn tip and points at its ball, turning only about its pin (local +Y).
+      const tip = toLegFrame(solution.hornTip, yaw);
+      const towardBall = toLegFrame(solution.platformJoint, yaw).sub(tip);
+      const link = legLinks[k]!;
+      link.position.copy(tip);
+      link.rotation.set(0, Math.atan2(towardBall.x, towardBall.z), 0);
     }
     return ik;
   };
@@ -257,14 +231,24 @@ export async function createRobot(geometry: PlatformGeometry, faceCanvas: HTMLCa
     ghost.matrixWorldNeedsUpdate = true;
   };
 
-  const drawnHornTips = (): Vec3[] => {
+  const inMechanismFrame = (objects: THREE.Object3D[]): Vec3[] => {
     root.updateMatrixWorld(true);
-    const toPeeqo = new THREE.Matrix4().copy(mechanism.matrixWorld).invert();
-    return hornTipMarkers.map((tip) => {
-      const p = tip.getWorldPosition(new THREE.Vector3()).applyMatrix4(toPeeqo);
+    const toLocal = new THREE.Matrix4().copy(mechanism.matrixWorld).invert();
+    return objects.map((o) => {
+      const p = o.getWorldPosition(new THREE.Vector3()).applyMatrix4(toLocal);
       return [p.x, p.y, p.z];
     });
   };
 
-  return { root, faceTexture, update, setRequested, setLeds: ledRing.setPixels, drawnHornTips };
+  return {
+    root,
+    faceTexture,
+    info,
+    bodies,
+    update,
+    setRequested,
+    setLeds: ledRing.setPixels,
+    drawnHornTips: () => inMechanismFrame(hornTips),
+    drawnLegTops: () => inMechanismFrame(legTops),
+  };
 }

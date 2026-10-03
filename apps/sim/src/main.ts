@@ -2,12 +2,15 @@ import './styles.css';
 import {
   ClassicLeds,
   DEFAULT_SAFETY_LIMITS,
+  DEV_KIT_CLEARANCE,
   DotstarStrip,
-  HOME_POSE,
   MotionGovernor,
-  PEEQO_2019_GEOMETRY,
+  DEV_KIT_GEOMETRY,
   PoseTrackPlayer,
   VirtualScheduler,
+  aroundNeutral,
+  checkPose,
+  clampToSafe,
   solveIk,
   type ClassicLedAnimation,
   type ClassicLedColor,
@@ -16,6 +19,7 @@ import {
 } from '@peeqo/core';
 import { CLASSIC_GLASSES_CYCLE, ClassicFace, FACE_HEIGHT, FACE_WIDTH } from '@peeqo/face';
 import { GLASSES_URLS, LEGACY_REACTIONS, LEGACY_TRACKS, SOUND_URLS } from './content.ts';
+import { createCollisionProbe } from './scene/collisionProbe.ts';
 import { createRobot } from './scene/robot.ts';
 import { createStage, type ViewName } from './scene/stage.ts';
 import { createPanel } from './ui/panel.ts';
@@ -58,7 +62,7 @@ async function main(): Promise<void> {
   faceCanvas.height = FACE_HEIGHT;
   const faceContext = faceCanvas.getContext('2d');
   if (!faceContext) throw new Error('Canvas 2D is not available');
-  const robot = await createRobot(PEEQO_2019_GEOMETRY, faceCanvas);
+  const robot = await createRobot(DEV_KIT_GEOMETRY, faceCanvas);
   stage.scene.add(robot.root);
 
   const glasses = new Map(await Promise.all([...GLASSES_URLS].map(async ([name, url]) => [name, await loadImage(url)] as const)));
@@ -67,7 +71,11 @@ async function main(): Promise<void> {
   face.setGlasses(initialGlasses ? (glasses.get(initialGlasses) ?? null) : null);
   face.startBlinking(performance.now());
 
-  const governor = new MotionGovernor(PEEQO_2019_GEOMETRY, DEFAULT_SAFETY_LIMITS);
+  // Starts at the dev kit's neutral pose (level, at the height with the most room to move) and checks every
+  // commanded pose against the CAD collision tables.
+  const governor = new MotionGovernor(DEV_KIT_GEOMETRY, DEFAULT_SAFETY_LIMITS, null, DEV_KIT_CLEARANCE);
+  const neutral = governor.neutral;
+  const probe = createCollisionProbe(robot.bodies);
   const strip = new DotstarStrip(12);
   const timers = new VirtualScheduler(performance.now());
   const leds = new ClassicLeds(strip, timers);
@@ -84,7 +92,8 @@ async function main(): Promise<void> {
   const playAnimation = (name: string): void => {
     const track = LEGACY_TRACKS.get(name);
     if (!track) throw new Error(`Unknown animation "${name}"`);
-    player = new PoseTrackPlayer(track, performance.now());
+    // The 2019 animations are motions around level; play them around the neutral pose.
+    player = new PoseTrackPlayer({ ...track, poses: aroundNeutral(track.poses, neutral) }, performance.now());
   };
   const playLeds = (animation: ClassicLedAnimation, color: ClassicLedColor): void => leds.play(animation, color);
   const playSound = (name: keyof typeof sounds): void => {
@@ -104,12 +113,13 @@ async function main(): Promise<void> {
   const panel = createPanel(
     panelHost,
     {
-      geometry: PEEQO_2019_GEOMETRY,
+      geometry: DEV_KIT_GEOMETRY,
       limits: DEFAULT_SAFETY_LIMITS,
       animations: [...LEGACY_TRACKS.keys()],
       reactions: LEGACY_REACTIONS.map((r) => r.name),
       glasses: [...glasses.keys()],
       initialGlasses,
+      neutral,
     },
     {
       onTarget: setTarget,
@@ -134,7 +144,7 @@ async function main(): Promise<void> {
     }),
     /** Largest gap (mm) between the drawn horn tips and the kinematics, to prove the model matches the maths. */
     hornTipError: () => {
-      const ik = solveIk(governor.output.pose, PEEQO_2019_GEOMETRY);
+      const ik = solveIk(governor.output.pose, DEV_KIT_GEOMETRY);
       return Math.max(
         ...robot.drawnHornTips().map((tip, i) => {
           const leg = ik.legs[i as 0 | 1 | 2];
@@ -142,6 +152,25 @@ async function main(): Promise<void> {
         }),
       );
     },
+    /** Largest gap (mm) between the drawn leg tops and the ball joints; the legs stay in their pin plane, so this shows the kinematic model's small sideways error. */
+    legTopError: () => {
+      const ik = solveIk(governor.output.pose, DEV_KIT_GEOMETRY);
+      return Math.max(
+        ...robot.drawnLegTops().map((top, i) => {
+          const joint = ik.legs[i as 0 | 1 | 2].platformJoint;
+          return Math.hypot(top[0] - joint[0], top[1] - joint[1], top[2] - joint[2]);
+        }),
+      );
+    },
+    /** The safe edge the governor should stop at for a target (for checks). */
+    safeEdge: (target: Pose) => clampToSafe(target, neutral, DEV_KIT_GEOMETRY, DEFAULT_SAFETY_LIMITS, DEV_KIT_CLEARANCE).pose,
+    neutral: () => neutral,
+    /** Guaranteed clearance from the collision tables at the commanded pose. */
+    tableClearance: () => checkPose(governor.output.pose, DEV_KIT_GEOMETRY, DEFAULT_SAFETY_LIMITS, DEV_KIT_CLEARANCE).clearance,
+    /** Smallest clearance among the pairs verified once over every admitted pose (they have no per-pose table). */
+    verifiedClearance: () => Math.min(...Object.values(DEV_KIT_CLEARANCE.verifiedMm)),
+    /** Measured mesh-to-mesh gaps at the drawn pose (independent of the tables; slow). */
+    probeCollisions: () => probe.measure(),
     setTarget,
     playAnimation,
     playLeds,
@@ -164,8 +193,8 @@ async function main(): Promise<void> {
         panel.showTarget(target);
       } else {
         player = null;
-        governor.setTarget(HOME_POSE);
-        panel.showTarget(HOME_POSE);
+        governor.setTarget(neutral);
+        panel.showTarget(neutral);
       }
     }
     let steps = 0;
@@ -188,7 +217,7 @@ async function main(): Promise<void> {
       face.draw(faceContext);
       robot.faceTexture.needsUpdate = true;
     }
-    panel.update(out, player?.track.name ?? null);
+    panel.update(out, player?.track.name ?? null, checkPose(out.pose, DEV_KIT_GEOMETRY, DEFAULT_SAFETY_LIMITS, DEV_KIT_CLEARANCE).clearance);
     stage.render();
 
     if (first) {
