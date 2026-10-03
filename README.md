@@ -1,3 +1,8 @@
+# Next-generation software (branch `next`)
+
+A rewrite in TypeScript with a browser simulator, CAD-checked safe motion, expressive eyes, and an AI brain. Start
+with [docs/next.md](docs/next.md). The 2019 app below is unchanged.
+
 # Discord
 
 Join us on [discord](http://bit.ly/2HLtxez)

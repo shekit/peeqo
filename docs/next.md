@@ -1,0 +1,57 @@
+# Peeqo, next generation
+
+The 2019 Electron app (`electron/`) is left as it was. The new software lives in a TypeScript workspace beside it,
+and is developed against a simulator first. The same code will run on the robot.
+
+```sh
+npm install          # once
+npm run sim          # the simulator, at http://localhost:5173
+npm run check        # typecheck, unit tests, production build
+npm run verify:sim   # drives the built simulator in Chrome
+```
+
+## Packages
+
+| Package | What it is |
+| --- | --- |
+| `packages/core` | Neck kinematics, the safety governor, CAD collision tables, head animation, LED patterns. No DOM or Node APIs. |
+| `packages/face` | The screen face: expressive eyes (and the 2019 eyes), drawn on a canvas. |
+| `packages/character` | Peeqo as a character: states, expressions, synthesized sounds, and its life between conversations. |
+| `packages/brain` | The mind: OpenRouter model, Klipy GIFs, persona, conversation loop, and an offline stand-in. |
+| `apps/sim` | The browser simulator, and the local API that holds the keys. See [its README](../apps/sim/README.md). |
+
+## How a moment flows
+
+```
+mic / text ─▶ Brain ─(OpenRouter: respond = words + expressions + GIF)─▶ BrainBody
+                                                                            │
+           ┌──────────────── Character (states, expressions) ◀─────────────┤
+           │                                                                │ GIF ─▶ face screen
+           ├─▶ HeadAnimator ─▶ MotionGovernor ─▶ servos (sim: 3D model)     │ words ─▶ voice / caption
+           ├─▶ ExpressiveFace ─▶ screen
+           ├─▶ LedAnimator ─▶ DotStar ring
+           └─▶ sounds ─▶ speaker
+```
+
+## Safety
+
+Every head pose, whether from sliders, animations, the brain or anything later, goes through `MotionGovernor`:
+
+- **Refused poses:** any pose that would bring two parts within 0.5 mm of each other. Gaps come from exact
+  mesh distances precomputed from the Fusion assembly, and are re-measured independently by
+  `npm run check:clearance -w @peeqo/sim`.
+- **Also refused:** poses with a horn and leg nearly in line, or a rod end tilted past 18°.
+- **Speed limits:** caps on speed, acceleration and servo speed.
+- **Paths:** moves are straight lines, and it goes round by the neutral pose when the straight path is blocked.
+
+Every gesture leaves at least 30% of the neck's room to spare. Tests play every gesture and expression through the
+real governor.
+
+## Before the robot moves
+
+- **Servo calibration:** find which pulse puts each horn level, and which way each turns. The 2019 pulse
+  mapping does not hold for the dev kit.
+- **Wiring:** confirm which PCA9685 channel drives which servo, and where LED 0 sits.
+- **Real play:** measure backlash and play in the rod ends (the model assumes rigid, perfectly fitted parts).
+- **Robot runtime:** the same `Character` and `Brain`, with drivers for the servos (PCA9685), LEDs (DotStar),
+  screen, speaker and microphone.
