@@ -21,7 +21,7 @@ import {
   type GovernorOutput,
   type Pose,
 } from '@peeqo/core';
-import { CLASSIC_GLASSES_CYCLE, ClassicFace, FACE_HEIGHT, FACE_WIDTH } from '@peeqo/face';
+import { CLASSIC_GLASSES_CYCLE, ClassicFace, EMOTIONS, ExpressiveFace, FACE_HEIGHT, FACE_WIDTH, isEmotion } from '@peeqo/face';
 import { GLASSES_URLS, LEGACY_REACTIONS, LEGACY_TRACKS, SOUND_URLS } from './content.ts';
 import { createCollisionProbe } from './scene/collisionProbe.ts';
 import { createRobot } from './scene/robot.ts';
@@ -60,6 +60,8 @@ async function main(): Promise<void> {
   const panelHost = document.querySelector('#panel');
   if (!(canvas instanceof HTMLCanvasElement) || !(panelHost instanceof HTMLElement)) throw new Error('Page is missing #scene or #panel');
 
+  // URL options: ?idle=0 starts with the alive layer off, ?face=classic with the 2019 eyes.
+  const params = new URLSearchParams(window.location.search);
   const stage = createStage(canvas);
   const faceCanvas = document.createElement('canvas');
   faceCanvas.width = FACE_WIDTH;
@@ -70,10 +72,23 @@ async function main(): Promise<void> {
   stage.scene.add(robot.root);
 
   const glasses = new Map(await Promise.all([...GLASSES_URLS].map(async ([name, url]) => [name, await loadImage(url)] as const)));
-  const face = new ClassicFace();
+  // The expressive eyes by default; the 2019 eyes stay available for comparison. Glasses fit both.
+  const expressive = new ExpressiveFace({ seed: (Math.random() * 2 ** 32) >>> 0 });
+  const classic = new ClassicFace();
+  let faceStyle: 'expressive' | 'classic' = params.get('face') === 'classic' ? 'classic' : 'expressive';
+  const face = (): ExpressiveFace | ClassicFace => (faceStyle === 'expressive' ? expressive : classic);
   const initialGlasses = glasses.has(CLASSIC_GLASSES_CYCLE[0]) ? CLASSIC_GLASSES_CYCLE[0] : null;
-  face.setGlasses(initialGlasses ? (glasses.get(initialGlasses) ?? null) : null);
-  face.startBlinking(performance.now());
+  const setGlasses = (name: string | null): void => {
+    const image = name ? (glasses.get(name) ?? null) : null;
+    expressive.setGlasses(image);
+    classic.setGlasses(image);
+  };
+  setGlasses(initialGlasses);
+  classic.startBlinking(performance.now());
+  const setEmotion = (name: string, intensity = 1): void => {
+    if (!isEmotion(name)) throw new Error(`Unknown emotion "${name}"`);
+    expressive.setEmotion(name, intensity);
+  };
 
   // Starts at the dev kit's neutral pose (level, at the height with the most room to move) and checks every
   // commanded pose against the CAD collision tables.
@@ -81,7 +96,6 @@ async function main(): Promise<void> {
   const neutral = governor.neutral;
   // Head motion comes from one of three places: the animator (gestures over the idle layer; the default), the
   // sliders (manual), or a 2019 animation track (legacy). The animator takes over again from wherever the head is.
-  const params = new URLSearchParams(window.location.search);
   const animator = new HeadAnimator(neutral, { seed: (Math.random() * 2 ** 32) >>> 0, idle: params.get('idle') !== '0' });
   let mode: 'animator' | 'manual' | 'legacy' = 'animator';
   const toAnimator = (): void => {
@@ -148,6 +162,8 @@ async function main(): Promise<void> {
       neutral,
       headAnimations: HEAD_ANIMATION_NAMES.map((name) => ({ name, description: HEAD_ANIMATIONS.get(name)!.description })),
       idle: animator.idle,
+      emotions: EMOTIONS,
+      faceStyle,
     },
     {
       onTarget: setTarget,
@@ -158,8 +174,12 @@ async function main(): Promise<void> {
       onAnimation: playAnimation,
       onReaction: react,
       onLeds: playLeds,
-      onGlasses: (name) => face.setGlasses(name ? (glasses.get(name) ?? null) : null),
-      onBlink: () => face.blink(performance.now()),
+      onGlasses: setGlasses,
+      onBlink: () => face().blink(performance.now()),
+      onFaceStyle: (style) => {
+        faceStyle = style;
+      },
+      onEmotion: (name) => setEmotion(name),
       onView: (name) => stage.setView(name),
       onShowRequested: (show) => {
         showRequested = show;
@@ -175,7 +195,9 @@ async function main(): Promise<void> {
       gesture: animator.playing,
       idle: animator.idle,
       litLeds: strip.shown.flatMap((p, i) => (p.brightness > 0 && (p.r || p.g || p.b) ? [i] : [])),
-      eyes: face.eyeRadii,
+      faceStyle,
+      eyes: faceStyle === 'classic' ? classic.eyeRadii : expressive.state().eyes[0],
+      emotion: expressive.emotion,
     }),
     /** Largest gap (mm) between the drawn horn tips and the kinematics, to prove the model matches the maths. */
     hornTipError: () => {
@@ -213,6 +235,13 @@ async function main(): Promise<void> {
     headAnimations: () => HEAD_ANIMATION_NAMES.map((name) => ({ name, durationS: HEAD_ANIMATIONS.get(name)!.duration })),
     setIdle: (on: boolean) => animator.setIdle(on),
     setEnergy: (energy: number) => animator.setEnergy(energy),
+    setEmotion,
+    /** The face as drawn right now, as a PNG data URL. */
+    faceImage: () => faceCanvas.toDataURL('image/png'),
+    lookAt: (target: [number, number] | null) => expressive.lookAt(target),
+    setFaceStyle: (style: 'expressive' | 'classic') => {
+      faceStyle = style;
+    },
     playLeds,
     react,
     setView: (name: ViewName) => stage.setView(name),
@@ -254,8 +283,8 @@ async function main(): Promise<void> {
       robot.setLeds(strip.shown);
       ledVersion = strip.version;
     }
-    if (face.update(now)) {
-      face.draw(faceContext);
+    if (face().update(now)) {
+      face().draw(faceContext);
       robot.faceTexture.needsUpdate = true;
     }
     panel.update(out, player?.track.name ?? null, checkPose(out.pose, DEV_KIT_GEOMETRY, DEFAULT_SAFETY_LIMITS, DEV_KIT_CLEARANCE).clearance, animator.playing);

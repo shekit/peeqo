@@ -3,8 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Peeqo's screen face, drawn on an 800×480 canvas. Used by the simulator and, later, the robot's display.",
+  "description": "Peeqo's screen face, drawn on an 800\u00d7480 canvas. Used by the simulator and, later, the robot's display.",
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@peeqo/core": "*"
   }
 }

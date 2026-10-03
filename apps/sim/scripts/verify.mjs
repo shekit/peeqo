@@ -174,8 +174,15 @@ try {
   await hook('setView', 'face');
   await page.waitForTimeout(300);
   s = await state();
-  check('eyes are open at rest', s.eyes.rx === 87.5);
+  check('eyes are open at rest', s.eyes.rx === 87.5 && s.faceStyle === 'expressive');
   await shot('06-face');
+  await hook('setEmotion', 'surprised');
+  s = await waitFor((x) => x.eyes.rx > 100, 3000);
+  check('expressive eyes: "surprised" opens them wide', !!s, s ? `rx ${s.eyes.rx.toFixed(1)} px` : 'timed out');
+  await hook('setEmotion', 'happy');
+  await page.waitForTimeout(800);
+  await shot('06b-face-happy');
+  await hook('setEmotion', 'neutral');
 
   await hook('setView', 'neck');
   const compound = { pitchDeg: neutral.pitchDeg - 1.5, rollDeg: neutral.rollDeg + 1.5, heaveMm: neutral.heaveMm + 0.5 };

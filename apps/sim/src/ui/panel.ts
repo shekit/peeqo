@@ -27,6 +27,8 @@ export interface PanelCallbacks {
   onLeds(animation: ClassicLedAnimation, color: ClassicLedColor): void;
   onGlasses(name: string | null): void;
   onBlink(): void;
+  onFaceStyle(style: 'expressive' | 'classic'): void;
+  onEmotion(name: string): void;
   onView(name: ViewName): void;
   onShowRequested(show: boolean): void;
 }
@@ -43,6 +45,8 @@ export interface PanelOptions {
   readonly headAnimations: readonly { readonly name: string; readonly description: string }[];
   /** Whether the idle layer starts on. */
   readonly idle: boolean;
+  readonly emotions: readonly string[];
+  readonly faceStyle: 'expressive' | 'classic';
 }
 
 export interface Panel {
@@ -221,7 +225,28 @@ export function createPanel(host: HTMLElement, options: PanelOptions, callbacks:
   glasses.addEventListener('change', () => callbacks.onGlasses(glasses.value || null));
   const blink = el('button', { type: 'button', text: 'Blink' });
   blink.addEventListener('click', () => callbacks.onBlink());
-  host.append(section('Face', el('div', { class: 'row' }, glasses, blink)));
+  const style = el('select', { 'aria-label': 'Face style' }, el('option', { value: 'expressive', text: 'expressive eyes' }), el('option', { value: 'classic', text: '2019 eyes' }));
+  style.value = options.faceStyle;
+  const emotionButtons = el(
+    'div',
+    { class: 'buttons' },
+    ...options.emotions.map((name) => {
+      const b = el('button', { type: 'button', text: name, 'data-name': name });
+      b.addEventListener('click', () => {
+        for (const other of emotionButtons.querySelectorAll('button')) other.classList.toggle('active', other === b);
+        callbacks.onEmotion(name);
+      });
+      return b;
+    }),
+  );
+  emotionButtons.querySelector('button[data-name="neutral"]')?.classList.add('active');
+  const syncStyle = () => emotionButtons.classList.toggle('disabled', style.value !== 'expressive');
+  style.addEventListener('change', () => {
+    callbacks.onFaceStyle(style.value === 'classic' ? 'classic' : 'expressive');
+    syncStyle();
+  });
+  syncStyle();
+  host.append(section('Face', el('div', { class: 'row' }, style, glasses, blink), el('div', { class: 'face-emotions' }, emotionButtons)));
 
   // ---- view ----
   host.append(section('View', buttonRow(Object.keys(VIEWS), (name) => callbacks.onView(name as ViewName))));

@@ -59,6 +59,19 @@ a second. The same code will drive the robot.
   at least 30% of the room to spare. Tests play them all, with variation and the alive layer, and check that
   every frame is safe and the governor never has to hold anything back.
 
+## Face
+
+`ExpressiveFace` (`packages/face`) keeps Peeqo's 2019 look: black eyes on white, in the same place, so the
+glasses overlays still fit.
+
+- **16 emotions:** neutral, happy, excited, love, sad, angry, surprised, scared, sleepy, curious, confused,
+  thinking, listening, shy, wink and skeptical.
+- **Shapes:** each eye is shaped by its size, openness, a curved and slanted top lid, a smiling lower lid,
+  catch-lights and, for love, a beating heart. Springs blend between emotions, so changes pop and settle.
+- **Alive on its own:** varied blinks (sometimes double, often during a big glance), saccades with
+  micro-saccades between them, and a gaze that follows the emotion. It can also be told where to look.
+- **2019 eyes:** still available from the panel or with `?face=classic`.
+
 ## Neck (dev kit, from the CAD)
 
 - **Servos:** shafts 27.32 mm from the centre, 42 mm up. Each servo has a U-horn with its hubs.

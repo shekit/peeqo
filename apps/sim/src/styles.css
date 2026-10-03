@@ -288,3 +288,12 @@ footer {
 .idle-row input[type='range'] {
   width: 110px;
 }
+
+.face-emotions {
+  margin-top: 8px;
+}
+
+.buttons.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
