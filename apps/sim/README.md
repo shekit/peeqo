@@ -58,6 +58,8 @@ npm run check:clearance -w @peeqo/sim        # re-measures the real meshes at 50
   - Put `OPENROUTER_API_KEY` (and `KLIPY_API` for GIFs) in the repo's `.env`, which git ignores.
   - Run `npm run sim`.
   - The dev server proxies the calls (`apps/sim/server/api.ts`), so the keys never reach the page.
+  - The proxy only answers the simulator page itself; other sites are refused.
+  - It only passes on Claude models, with replies capped at 1,000 tokens.
 - **GIFs:** come from Klipy.
   - Searches are cached on disk, and an hourly budget of 90 keeps under the key's 100.
   - Media is served from the dev server, so the face can draw it.

@@ -49,7 +49,8 @@ const add = (a: Offset, b: readonly number[], k = 1): Offset => [a[0] + k * b[0]
  *
  * Layers, summed then passed through the follow-through spring:
  * - the current gesture (HEAD_ANIMATIONS), scaled by intensity and slightly varied each time;
- * - the remains of an interrupted gesture, fading out over HANDOVER_S;
+ * - when a gesture is interrupted, a crossfade over HANDOVER_S from what was showing to the new gesture (a blend
+ *   of two in-range poses, never their sum, so an interruption cannot push the head further than either);
  * - the idle layer: breathing, a slow wander, and now and then a glance or a curious tilt. Its size and pace follow
  *   `energy` (0 = drowsy and still, 1 = lively); it shrinks to a quarter under gestures and can be switched off.
  */
@@ -148,12 +149,11 @@ export class HeadAnimator {
     this.#time += dt;
     const t = this.#time;
 
-    let total: Offset = this.#gestureOffset(t);
+    let total: Offset = this.#gestureLayer(t);
     if (this.#gesture && (t - this.#gesture.start) * this.#gesture.timeScale >= this.#gesture.clip.duration) {
       this.#gesture = null;
       this.#lastGestureEnd = t;
     }
-    total = add(total, this.#handoverOffset(t));
 
     const idleTarget = !this.#idleOn ? 0 : this.#gesture ? IDLE_UNDER_GESTURE : 1;
     this.#idleWeight += (idleTarget - this.#idleWeight) * (1 - Math.exp(-dt / IDLE_BLEND_S));
@@ -174,16 +174,25 @@ export class HeadAnimator {
     return [at[0] * g.amplitude, at[1] * g.amplitude, at[2] * g.amplitude];
   }
 
-  #handoverOffset(t: number): Offset {
+  /** How far the current handover has got: 0 = all of what was interrupted, 1 = all new (also when there is none). */
+  #handoverProgress(t: number): number {
     const h = this.#handover;
-    if (!h) return [0, 0, 0];
+    if (!h) return 1;
     const u = (t - h.start) / HANDOVER_S;
     if (u >= 1) {
       this.#handover = null;
-      return [0, 0, 0];
+      return 1;
     }
-    const k = 1 - smoothstep(Math.max(0, u));
-    return [h.from[0] * k, h.from[1] * k, h.from[2] * k];
+    return smoothstep(Math.max(0, u));
+  }
+
+  /** The gesture layer: the gesture, crossfading in from whatever it interrupted. */
+  #gestureLayer(t: number): Offset {
+    const k = this.#handoverProgress(t);
+    const g = this.#gestureOffset(t);
+    const h = this.#handover;
+    if (!h || k >= 1) return g;
+    return [g[0] * k + h.from[0] * (1 - k), g[1] * k + h.from[1] * (1 - k), g[2] * k + h.from[2] * (1 - k)];
   }
 
   #glanceOffset(t: number): Offset {
@@ -198,11 +207,10 @@ export class HeadAnimator {
     return [g.curves[0].at(local), g.curves[1].at(local), g.curves[2].at(local)];
   }
 
-  /** What is moving now (gesture, handover, glance) becomes a handover that fades as the next thing starts. */
+  /** What is showing now (gesture layer, glance) becomes what the next thing crossfades from. */
   #handOver(): void {
     const t = this.#time;
-    let from = add(this.#gestureOffset(t), this.#handoverOffset(t));
-    from = add(from, this.#glanceOffset(t), this.#idleWeight);
+    const from = add(this.#gestureLayer(t), this.#glanceOffset(t), this.#idleWeight);
     this.#glance = null;
     this.#nextGlance = t + this.#glanceDelay();
     this.#handover = from.some((v) => v !== 0) ? { from, start: t } : null;

@@ -7,8 +7,8 @@ import { respondTool, systemPrompt } from './persona.ts';
 export interface BrainBody {
   setState(state: CharacterState): void;
   express(name: ExpressionName, intensity: number): void;
-  /** Shows a GIF on the face screen; resolves once it is showing (or could not be loaded). */
-  showGif(gif: Gif): Promise<void>;
+  /** Shows a GIF on the face screen; resolves once it is showing (or could not be loaded). Skips it if `signal` aborts first. */
+  showGif(gif: Gif, signal?: AbortSignal): Promise<void>;
   /** Speaks the text aloud (voice on) or shows it as a caption; resolves when finished. */
   say(text: string, voice: boolean): Promise<void>;
 }
@@ -99,14 +99,22 @@ export class Brain {
     this.#gifs = gifs;
   }
 
-  /** Someone has started talking to Peeqo (a wake word, the mic opening): it pays attention. */
+  /** Someone has started talking to Peeqo (a wake word, the mic opening): it stops what it was doing and listens. */
   attend(): void {
-    if (!this.#turn) this.#body.setState('listening');
+    this.interrupt();
+    this.#body.setState('listening');
   }
 
   /** They stopped without saying anything: unless a turn is under way, Peeqo goes back to idle. */
   dismiss(): void {
     if (!this.#turn) this.#body.setState('idle');
+  }
+
+  /** Abandons the turn under way, if any (its words, GIF and second expression), without changing state. */
+  interrupt(): void {
+    this.#turn?.abort();
+    this.#turn = null;
+    this.#cancelPending();
   }
 
   /** Forgets the conversation. */
@@ -168,6 +176,7 @@ export class Brain {
         await this.#body.say(reply, this.voice);
       }
       if (gifShowing) await gifShowing;
+      if (turn.signal.aborted) return { ...result, interrupted: true };
     } catch (error) {
       if (turn.signal.aborted) return { ...result, interrupted: true };
       result.error = error instanceof Error ? error.message : String(error);
@@ -231,7 +240,8 @@ export class Brain {
       const gifs = (await this.#gifs?.search(query, 8, signal)) ?? [];
       if (gifs.length === 0 || signal.aborted) return;
       const gif = gifs[Math.floor(this.#random() * Math.min(5, gifs.length))]!;
-      await this.#body.showGif(gif);
+      await this.#body.showGif(gif, signal);
+      if (signal.aborted) return;
       result.gif = gif;
       this.#onEvent({ type: 'tool', name: 'show_gif', args: JSON.stringify({ query }), result: `showing ${gif.title || gif.id}` });
     } catch (error) {
@@ -269,7 +279,7 @@ export class Brain {
         if (gifs.length === 0) return this.#report(call, 'no GIF found for that');
         // One of the best few, so the same query does not always show the same GIF.
         const gif = gifs[Math.floor(this.#random() * Math.min(5, gifs.length))]!;
-        await this.#body.showGif(gif);
+        await this.#body.showGif(gif, signal);
         result.gif = gif;
         return this.#report(call, `showing a GIF${gif.title ? `: ${gif.title.slice(0, 80)}` : ''}`);
       }

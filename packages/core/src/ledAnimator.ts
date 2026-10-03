@@ -130,9 +130,15 @@ export class LedAnimator {
   #level: number | null = null;
   #twinkles: number[];
   #lastWritten = '';
+  readonly #onPlay: () => void;
 
-  constructor(strip: DotstarStrip, options: { seed?: number } = {}) {
+  /**
+   * @param options.onPlay called whenever this animator starts a pattern (so whatever else drives the strip, such
+   *   as the 2019 animations, can stop)
+   */
+  constructor(strip: DotstarStrip, options: { seed?: number; onPlay?: () => void } = {}) {
     this.strip = strip;
+    this.#onPlay = options.onPlay ?? (() => undefined);
     this.#random = seededRandom(options.seed ?? 1);
     this.#angles = Array.from({ length: strip.length }, (_, i) => LED_RING_LAYOUT.firstLedDeg + i * LED_RING_LAYOUT.stepDeg);
     this.#voice = smoothWander(this.#random, 0.7);
@@ -160,6 +166,8 @@ export class LedAnimator {
     if (PATTERNS[name].duration === null) this.#base = next;
     this.#playing = next;
     this.#active = true;
+    this.#lastWritten = ''; // something else may have written to the strip meanwhile: write the next frame regardless
+    this.#onPlay();
   }
 
   /** Stops driving the strip, leaving it to something else (the 2019 animations). */
@@ -179,7 +187,8 @@ export class LedAnimator {
     const p = this.#playing;
     const duration = PATTERNS[p.name].duration;
     if (duration !== null && this.#nowS - p.startS >= duration / p.speed) {
-      const after = p.then ? this.#make(p.then, { color: p.color, speed: p.speed, brightness: p.brightness }) : { ...this.#base, startS: this.#nowS };
+      // A follow-up pattern keeps the one-shot's pace and brightness but its own colour (error then breathe should not breathe red).
+      const after = p.then ? this.#make(p.then, { speed: p.speed, brightness: p.brightness }) : { ...this.#base, startS: this.#nowS };
       this.#from = this.#frame.map((c) => [...c] as unknown as Rgb);
       this.#fadeStartS = this.#nowS;
       this.#playing = after;

@@ -121,6 +121,7 @@ export class KlipyClient {
     if (!response.ok) throw new Error(`GIF search failed (${response.status})`);
     const gifs = parseResults(await response.json());
     this.#cache.set(q, { at: now, gifs });
+    for (const [key, entry] of this.#cache) if (now - entry.at >= this.#options.cacheHours * HOUR_MS) this.#cache.delete(key);
     this.#options.store?.save(Object.fromEntries(this.#cache));
     return gifs;
   }

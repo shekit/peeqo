@@ -146,6 +146,20 @@ describe('Character', () => {
     run(parts, now, 0.1);
   });
 
+  it('applies the whole new state, gaze included, when it changed during an expression', () => {
+    const parts = build();
+    const looks: (readonly [number, number] | null)[] = [];
+    const lookAt = parts.face.lookAt.bind(parts.face);
+    parts.face.lookAt = (target) => {
+      looks.push(target);
+      lookAt(target);
+    };
+    parts.character.express('happy'); // does not move the gaze itself
+    parts.character.setState('speaking');
+    run(parts, 0, 3);
+    expect(looks.at(-1)).toEqual([0, -0.05]); // speaking's gaze
+  });
+
   it('scales an expression by intensity', () => {
     const parts = build();
     parts.character.express('happy', { intensity: 0.4 });

@@ -36,7 +36,7 @@ export class SimBody implements BrainBody {
     this.#parts.character.express(name, { intensity });
   }
 
-  async showGif(gif: Gif): Promise<void> {
+  async showGif(gif: Gif, signal?: AbortSignal): Promise<void> {
     const face = this.#parts.face;
     if (gif.mp4) {
       const video = document.createElement('video');
@@ -44,14 +44,11 @@ export class SimBody implements BrainBody {
       video.loop = true;
       video.playsInline = true;
       video.src = gif.mp4;
-      if (!(await loaded(video, 'loadeddata', 5000))) return;
+      if (!(await loaded(video, 'loadeddata', 5000)) || signal?.aborted) return release(video);
       await video.play().catch(() => undefined);
+      if (signal?.aborted) return release(video);
       face.showMedia({ source: video, width: video.videoWidth || gif.width, height: video.videoHeight || gif.height }, performance.now(), GIF_MS);
-      setTimeout(() => {
-        video.pause();
-        video.removeAttribute('src');
-        video.load();
-      }, GIF_MS + 600);
+      setTimeout(() => release(video), GIF_MS + 600);
     } else if (gif.gif) {
       const image = new Image();
       image.src = gif.gif;
@@ -59,7 +56,7 @@ export class SimBody implements BrainBody {
         () => true,
         () => false,
       );
-      if (ok) face.showMedia({ source: image, width: image.naturalWidth || gif.width, height: image.naturalHeight || gif.height }, performance.now(), GIF_MS);
+      if (ok && !signal?.aborted) face.showMedia({ source: image, width: image.naturalWidth || gif.width, height: image.naturalHeight || gif.height }, performance.now(), GIF_MS);
     }
   }
 
@@ -99,6 +96,13 @@ export class SimBody implements BrainBody {
     if (typeof speechSynthesis !== 'undefined') speechSynthesis.cancel();
     this.#speaking?.done();
   }
+}
+
+/** Stops a video and lets the browser free it. */
+function release(video: HTMLVideoElement): void {
+  video.pause();
+  video.removeAttribute('src');
+  video.load();
 }
 
 function loaded(element: HTMLMediaElement, event: string, timeoutMs: number): Promise<boolean> {

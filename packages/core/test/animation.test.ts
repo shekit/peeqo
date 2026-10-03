@@ -154,6 +154,22 @@ describe('HeadAnimator', () => {
     }
   });
 
+  it('never needs holding back when one gesture interrupts another, at any point', () => {
+    for (const first of HEAD_ANIMATION_NAMES) {
+      for (const second of HEAD_ANIMATION_NAMES) {
+        for (const after of [0.15, 0.45]) {
+          const animator = new HeadAnimator(neutral, { seed: 2 });
+          const { governor } = drive(animator, 0.5);
+          animator.play(first);
+          const one = drive(animator, after, governor);
+          animator.play(second);
+          const two = drive(animator, HEAD_ANIMATIONS.get(second)!.duration / 0.94 + 0.5, governor);
+          expect([one.worst, two.worst], `${first} interrupted by ${second} after ${after} s`).toEqual(['ok', 'ok']);
+        }
+      }
+    }
+  }, 120_000);
+
   it('keeps every servo well under its speed cap', () => {
     for (const name of HEAD_ANIMATION_NAMES) {
       const animator = new HeadAnimator(neutral, { seed: 9, idle: false });

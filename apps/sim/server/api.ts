@@ -21,6 +21,27 @@ export interface ApiOptions {
 type Next = (error?: unknown) => void;
 const MAX_BODY = 1_000_000;
 const MEDIA_HOSTS = new Set(['static.klipy.com']);
+/** Models the proxy will pay for, and the longest reply it allows. */
+const ALLOWED_MODEL = /^anthropic\/claude-[\w.-]+$/;
+const MAX_TOKENS = 1000;
+const UPSTREAM_TIMEOUT_MS = 60_000;
+
+/**
+ * Only the simulator page itself may use the API. Browsers say where a request comes from (Sec-Fetch-Site, Origin);
+ * a request from another site (another tab trying to spend the keys) is refused. Requests without those headers
+ * are not from a web page (curl, scripts on this machine) and are allowed.
+ */
+function fromThisPage(req: IncomingMessage): boolean {
+  const site = req.headers['sec-fetch-site'];
+  if (site !== undefined && site !== 'same-origin' && site !== 'none') return false;
+  const origin = req.headers.origin;
+  if (origin === undefined) return true;
+  try {
+    return new URL(origin).host === req.headers.host;
+  } catch {
+    return false;
+  }
+}
 
 export function createApi(options: ApiOptions): (req: IncomingMessage, res: ServerResponse, next: Next) => void {
   fs.mkdirSync(path.join(options.cacheDir, 'media'), { recursive: true });
@@ -30,8 +51,19 @@ export function createApi(options: ApiOptions): (req: IncomingMessage, res: Serv
         apiKey: options.klipyKey,
         perHour: 90,
         store: {
-          load: () => (fs.existsSync(searchFile) ? (JSON.parse(fs.readFileSync(searchFile, 'utf8')) as Record<string, CachedSearch>) : null),
-          save: (data) => fs.writeFileSync(searchFile, JSON.stringify(data)),
+          load: () => {
+            try {
+              return fs.existsSync(searchFile) ? (JSON.parse(fs.readFileSync(searchFile, 'utf8')) as Record<string, CachedSearch>) : null;
+            } catch {
+              return null; // a damaged cache is simply started afresh
+            }
+          },
+          save: (data) => {
+            // Written to a temporary file then renamed, so a crash mid-write cannot leave a damaged cache.
+            const temp = `${searchFile}.${process.pid}.tmp`;
+            fs.writeFileSync(temp, JSON.stringify(data));
+            fs.renameSync(temp, searchFile);
+          },
         },
       })
     : null;
@@ -44,6 +76,10 @@ export function createApi(options: ApiOptions): (req: IncomingMessage, res: Serv
       next();
       return;
     }
+    if (!fromThisPage(req)) {
+      sendJson(res, 403, { error: 'The Peeqo API only answers the simulator page' });
+      return;
+    }
     handle(url, req, res).catch((error: unknown) => sendJson(res, 502, { error: redact(error instanceof Error ? error.message : String(error)) }));
   };
 
@@ -54,14 +90,38 @@ export function createApi(options: ApiOptions): (req: IncomingMessage, res: Serv
     }
     if (url.pathname === '/api/openrouter/chat/completions' && req.method === 'POST') {
       if (!options.openRouterKey) return sendJson(res, 503, { error: 'OPENROUTER_API_KEY is not set in .env' });
-      const body = await readBody(req);
+      if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return sendJson(res, 415, { error: 'Send JSON' });
+      let asked: Record<string, unknown>;
+      try {
+        asked = JSON.parse(await readBody(req)) as Record<string, unknown>;
+      } catch {
+        return sendJson(res, 400, { error: 'The request was not valid JSON' });
+      }
+      if (typeof asked.model !== 'string' || !ALLOWED_MODEL.test(asked.model)) return sendJson(res, 400, { error: 'That model is not allowed here' });
+      // Only what Peeqo uses is passed on, with the reply length capped.
+      const body = JSON.stringify({
+        model: asked.model,
+        messages: asked.messages,
+        ...(asked.tools ? { tools: asked.tools } : {}),
+        ...(asked.tool_choice ? { tool_choice: asked.tool_choice } : {}),
+        ...(typeof asked.temperature === 'number' ? { temperature: asked.temperature } : {}),
+        max_tokens: Math.min(MAX_TOKENS, typeof asked.max_tokens === 'number' && asked.max_tokens > 0 ? asked.max_tokens : 400),
+        stream: false,
+      });
+      // Gives up after a minute, or as soon as the page stops waiting (an interrupted turn should not run on).
+      const abandon = new AbortController();
+      res.on('close', () => {
+        if (!res.writableFinished) abandon.abort();
+      });
       const upstream = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${options.openRouterKey}`, 'X-Title': 'Peeqo sim', 'HTTP-Referer': 'https://github.com/shekit/peeqo' },
         body,
+        signal: AbortSignal.any([abandon.signal, AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)]),
       });
+      const text = await upstream.text(); // read fully before answering, so a failure here can still be reported
       res.writeHead(upstream.status, { 'Content-Type': upstream.headers.get('content-type') ?? 'application/json' });
-      res.end(redact(await upstream.text()));
+      res.end(redact(text));
       return;
     }
     if (url.pathname === '/api/gifs/search') {
@@ -98,7 +158,9 @@ export function createApi(options: ApiOptions): (req: IncomingMessage, res: Serv
         fs.writeFileSync(file, Buffer.from(await upstream.arrayBuffer()));
       }
       res.writeHead(200, { 'Content-Type': ext === '.gif' ? 'image/gif' : 'video/mp4', 'Cache-Control': 'max-age=86400' });
-      fs.createReadStream(file).pipe(res);
+      fs.createReadStream(file)
+        .on('error', () => res.destroy())
+        .pipe(res);
       return;
     }
     sendJson(res, 404, { error: 'Unknown API route' });
@@ -106,6 +168,11 @@ export function createApi(options: ApiOptions): (req: IncomingMessage, res: Serv
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
+  if (res.headersSent) {
+    // Too late for a proper error: end what was started.
+    res.destroy();
+    return;
+  }
   res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(body));
 }

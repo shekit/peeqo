@@ -119,7 +119,7 @@ async function main(): Promise<void> {
   const timers = new VirtualScheduler(performance.now());
   const leds = new ClassicLeds(strip, timers);
   // The new LED patterns and the 2019 animations share the strip; whichever was started last drives it.
-  const ledAnimator = new LedAnimator(strip, { seed: (Math.random() * 2 ** 32) >>> 0 });
+  const ledAnimator = new LedAnimator(strip, { seed: (Math.random() * 2 ** 32) >>> 0, onPlay: () => timers.clearAll() });
   // Peeqo as a character: states and expressions that move the head, eyes, ring and voice together.
   const voice = new WebSoundPlayer();
   const character = new Character({ head: animator, face: expressive, leds: ledAnimator, sound: voice });
@@ -178,8 +178,7 @@ async function main(): Promise<void> {
   const playLedPattern = (name: string, color?: string): void => {
     if (!isLedPatternName(name)) throw new Error(`Unknown LED pattern "${name}"`);
     if (color !== undefined && !isLedColorName(color)) throw new Error(`Unknown LED colour "${color}"`);
-    timers.clearAll(); // stops any 2019 animation still running
-    ledAnimator.play(name, color === undefined ? {} : { color });
+    ledAnimator.play(name, color === undefined ? {} : { color }); // (stops any 2019 animation still running)
   };
   const playSound = (name: keyof typeof sounds): void => {
     const audio = sounds[name];

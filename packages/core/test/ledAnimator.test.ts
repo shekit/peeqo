@@ -126,6 +126,30 @@ describe('LedAnimator', () => {
     expect(strip.version).toBeGreaterThan(version);
   });
 
+  it('takes the strip back properly from something else that wrote to it', () => {
+    const strip = new DotstarStrip(12);
+    let stopped = 0;
+    const leds = new LedAnimator(strip, { onPlay: () => stopped++ });
+    leds.play('off');
+    let now = run(leds, 0, 0.5);
+    leds.stop();
+    strip.all(255, 255, 255, 1); // the 2019 animations light the ring
+    strip.sync();
+    leds.play('off'); // same dark frame as before, but the strip is lit: it must still be written
+    run(leds, now, 0.5);
+    expect(levels(strip).every((v) => v === 0)).toBe(true);
+    expect(stopped).toBe(2);
+  });
+
+  it('gives a follow-up pattern its own colour', () => {
+    const { strip, leds } = setup();
+    leds.play('error', { then: 'breathe' });
+    run(leds, 0, 4);
+    const lit = strip.shown.filter((p) => p.brightness > 0);
+    expect(lit.length).toBeGreaterThan(0);
+    expect(lit.every((p) => p.b > p.r)).toBe(true); // breathe's sky blue, not error's red
+  });
+
   it('replays sparkles exactly with the same seed', () => {
     const trace = (seed: number) => {
       const { strip, leds } = setup(seed);

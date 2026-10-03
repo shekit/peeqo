@@ -289,10 +289,34 @@ describe('Brain', () => {
     brain.dismiss();
     expect(states).toEqual(['listening', 'idle']);
     const turn = brain.hear('hello');
-    brain.attend(); // the mic opens again mid-turn: the turn keeps its own states
+    brain.attend(); // the mic opens mid-turn: Peeqo drops the turn and listens
+    expect((await turn).interrupted).toBe(true);
+    expect(states).toEqual(['listening', 'idle', 'thinking', 'listening']);
     brain.dismiss();
-    await turn;
-    expect(states).toEqual(['listening', 'idle', 'thinking', 'speaking', 'idle']);
+    expect(states.at(-1)).toBe('idle');
+  });
+
+  it('never shows the GIF of a turn that was cut off', async () => {
+    const { log } = fakeBody();
+    let release: () => void = () => undefined;
+    const slowBody: BrainBody = {
+      setState: (s) => log.push(`state:${s}`),
+      express: (name) => log.push(`express:${name}`),
+      // The GIF takes a while to load; it must not appear if the turn was abandoned meanwhile.
+      showGif: async (gif, signal) => {
+        await new Promise<void>((r) => (release = r));
+        if (!signal?.aborted) log.push(`gif:${gif.id}`);
+      },
+      say: async () => undefined,
+    };
+    const klipy = new KlipyClient({ apiKey: KEY, fetch: fakeFetch([json(klipyResults(3))]).fn });
+    const brain = new Brain({ model: new ScriptedModel({ random: () => 0 }), body: slowBody, gifs: klipy });
+    const turn = brain.hear('show me a cat');
+    await new Promise((r) => setTimeout(r, 20)); // the GIF is loading
+    brain.attend();
+    release();
+    expect((await turn).interrupted).toBe(true);
+    expect(log.some((l) => l.startsWith('gif:'))).toBe(false);
   });
 
   it('remembers only the last few exchanges, cutting at a turn', async () => {

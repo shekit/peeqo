@@ -100,6 +100,8 @@ export class Character {
     this.#state = state;
     const spec = STATES[state];
     if (this.#running) {
+      // The new state's whole look (face, gaze, ring) takes over when the expression ends.
+      this.#running.touched = { face: true, look: true, leds: true };
       this.#parts.head.setEnergy(spec.energy);
       return;
     }
