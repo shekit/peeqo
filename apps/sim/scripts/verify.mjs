@@ -105,7 +105,7 @@ const shot = (name) => page.screenshot({ path: path.join(outDir, `${name}.png`) 
 
 try {
   // Idle off to start: the first checks expect the head exactly at neutral. It is switched on near the end.
-  await page.goto(`${url}?idle=0`);
+  await page.goto(`${url}?idle=0&life=0`); // and no spontaneous expressions, so every check sees only what it asked for
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 60000 });
   const neutral = await hook('neutral');
   const near = (a, b, tol = 1e-3) => ['pitchDeg', 'rollDeg', 'heaveMm'].every((k) => Math.abs(a[k] - b[k]) < tol);

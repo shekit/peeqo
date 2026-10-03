@@ -30,6 +30,7 @@ export interface PanelCallbacks {
   onExpression(name: string): void;
   onState(state: string): void;
   onMute(muted: boolean): void;
+  onLife(on: boolean): void;
   onGlasses(name: string | null): void;
   onBlink(): void;
   onFaceStyle(style: 'expressive' | 'classic'): void;
@@ -56,6 +57,8 @@ export interface PanelOptions {
   readonly ledColors: readonly string[];
   readonly expressions: readonly { readonly name: string; readonly description: string }[];
   readonly states: readonly string[];
+  /** Whether Peeqo starts living on its own (little moves, sleeping when left alone). */
+  readonly life: boolean;
 }
 
 export interface Panel {
@@ -96,13 +99,16 @@ export function createPanel(host: HTMLElement, options: PanelOptions, callbacks:
   );
   const mute = el('input', { type: 'checkbox' });
   mute.addEventListener('change', () => callbacks.onMute(mute.checked));
+  const lifeToggle = el('input', { type: 'checkbox', checked: options.life });
+  lifeToggle.addEventListener('change', () => callbacks.onLife(lifeToggle.checked));
   host.append(
     section(
       'Expressions',
       expressionButtons,
       el('p', { class: 'muted small state-label', text: 'State:' }),
       stateButtons,
-      el('label', { class: 'check mute' }, mute, ' Mute sounds'),
+      el('label', { class: 'check mute' }, lifeToggle, ' Lives on its own (little moves; sleeps when left alone)'),
+      el('label', { class: 'check' }, mute, ' Mute sounds'),
     ),
   );
 

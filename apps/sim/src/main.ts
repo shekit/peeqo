@@ -27,7 +27,7 @@ import {
   type GovernorOutput,
   type Pose,
 } from '@peeqo/core';
-import { CHARACTER_STATES, Character, EXPRESSION_NAMES, expressionSpec, isCharacterState, isExpressionName } from '@peeqo/character';
+import { CHARACTER_STATES, Character, EXPRESSION_NAMES, Life, expressionSpec, isCharacterState, isExpressionName } from '@peeqo/character';
 import { CLASSIC_GLASSES_CYCLE, ClassicFace, EMOTIONS, ExpressiveFace, FACE_HEIGHT, FACE_WIDTH, isEmotion } from '@peeqo/face';
 import { Brain, KlipyClient, OpenRouterModel, ScriptedModel } from '@peeqo/brain';
 import { WebSoundPlayer } from './audio/webSound.ts';
@@ -123,6 +123,10 @@ async function main(): Promise<void> {
   // Peeqo as a character: states and expressions that move the head, eyes, ring and voice together.
   const voice = new WebSoundPlayer();
   const character = new Character({ head: animator, face: expressive, leds: ledAnimator, sound: voice });
+  // Its own life between conversations: little things now and then, and sleep after a quiet spell (?life=0: off).
+  const life = new Life(character, { seed: (Math.random() * 2 ** 32) >>> 0 });
+  life.enabled = params.get('life') !== '0';
+  const poke = () => life.poke(performance.now());
   const sounds = { alert: new Audio(SOUND_URLS.alert) };
 
   let player: PoseTrackPlayer | null = null;
@@ -148,6 +152,7 @@ async function main(): Promise<void> {
   };
   const express = (name: string): void => {
     if (!isExpressionName(name)) throw new Error(`Unknown expression "${name}"`);
+    poke();
     player = null;
     toAnimator();
     faceStyle = 'expressive';
@@ -155,6 +160,7 @@ async function main(): Promise<void> {
   };
   const setCharacterState = (state: string): void => {
     if (!isCharacterState(state)) throw new Error(`Unknown state "${state}"`);
+    poke();
     player = null;
     toAnimator();
     character.setState(state);
@@ -206,6 +212,7 @@ async function main(): Promise<void> {
       ledPatterns: LED_PATTERN_NAMES.map((name) => ({ name, description: describeLedPattern(name) })),
       expressions: EXPRESSION_NAMES.map((name) => ({ name, description: expressionSpec(name).description })),
       states: CHARACTER_STATES,
+      life: life.enabled,
       ledColors: Object.keys(LED_COLORS),
     },
     {
@@ -222,6 +229,10 @@ async function main(): Promise<void> {
       onState: setCharacterState,
       onMute: (muted) => {
         voice.muted = muted;
+      },
+      onLife: (on) => {
+        life.enabled = on;
+        poke();
       },
       onGlasses: setGlasses,
       onBlink: () => face().blink(performance.now()),
@@ -260,12 +271,16 @@ async function main(): Promise<void> {
     },
   });
   const hear = (text: string) => {
+    poke();
     talk.addLine('you', text);
     body.hush();
     return brain.hear(text);
   };
   const mic = createMic({
-    onStart: () => brain.attend(),
+    onStart: () => {
+      poke();
+      brain.attend();
+    },
     onText: (text) => void hear(text),
     onState: (state) => talk.setMic(state),
     onError: (message) => talk.addLine('note', message),
@@ -363,6 +378,10 @@ async function main(): Promise<void> {
     },
     brainModel: () => brain.modelName,
     character: () => ({ state: character.state, expression: character.expression }),
+    setLife: (on: boolean) => {
+      life.enabled = on;
+      poke();
+    },
     react,
     setView: (name: ViewName) => stage.setView(name),
   };
@@ -400,6 +419,7 @@ async function main(): Promise<void> {
     robot.setRequested(showRequested && isClamped(out) ? out.requested : null);
     timers.advanceTo(now);
     character.update(now);
+    life.update(now);
     ledAnimator.update(now);
     if (strip.version !== ledVersion) {
       robot.setLeds(strip.shown);

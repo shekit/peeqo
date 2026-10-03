@@ -75,6 +75,12 @@ driven through it.
   confused, thinking, yes, no, hello, bye, shy, wink, celebrate, alert, oops, sigh, wonder). Each is a few
   timed steps that move the head, eyes, ring and voice together. When it ends, whatever it changed returns to
   the current state.
+- **Life between conversations (`Life`):**
+  - while idle, Peeqo now and then does something small on its own, such as a curious look or a little
+    wonder;
+  - left alone longer, its habits drift toward boredom: sighs, then yawns;
+  - after five quiet minutes it falls asleep, and anything that involves it wakes it with a start;
+  - it never interrupts listening, thinking or speaking.
 - **Voice:** short chirps, coos and bloops are synthesized in plain TypeScript (`sounds.ts`). The sim plays them
   through Web Audio; the robot can play the same samples.
 - **Safety:** tests play every expression from several states through the real governor, and check it never

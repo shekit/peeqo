@@ -14,6 +14,7 @@ import {
   CHARACTER_STATES,
   Character,
   EXPRESSION_NAMES,
+  Life,
   SOUND_NAMES,
   SOUND_SAMPLE_RATE,
   expressionSpec,
@@ -174,5 +175,52 @@ describe('Character', () => {
 
   it('rejects unknown expressions', () => {
     expect(() => build().character.express('moonwalk' as ExpressionName)).toThrow(/Unknown expression/);
+  });
+});
+
+describe('Life', () => {
+  it('falls asleep after a quiet spell, and wakes with a start when someone comes by', () => {
+    const parts = build();
+    const life = new Life(parts.character, { sleepAfterMs: 10_000, everyMs: [1e9, 1e9] });
+    let now = 0;
+    for (; now < 9_000; now += 100) life.update(now);
+    expect(parts.character.state).toBe('idle');
+    for (; now < 11_000; now += 100) life.update(now);
+    expect(parts.character.state).toBe('sleeping');
+    expect(parts.face.emotion).toBe('asleep');
+    life.poke(now);
+    expect(parts.character.state).toBe('idle');
+    expect(parts.character.expression).toBe('surprised');
+  });
+
+  it('does little things on its own while idle, drifting toward boredom', () => {
+    const parts = build();
+    const life = new Life(parts.character, { sleepAfterMs: 1e9, everyMs: [5_000, 5_000], seed: 3 });
+    const seen: { at: number; name: string }[] = [];
+    for (let now = 0; now < 240_000; now += 50) {
+      parts.character.update(now);
+      life.update(now);
+      const name = parts.character.expression;
+      if (name && seen.at(-1)?.name !== name) seen.push({ at: now, name });
+      if (!name && seen.at(-1)?.name !== '-') seen.push({ at: now, name: '-' });
+    }
+    const played = seen.filter((s) => s.name !== '-');
+    expect(played.length).toBeGreaterThan(30);
+    expect(played.filter((p) => p.at < 30_000).every((p) => ['curious', 'wonder', 'happy'].includes(p.name))).toBe(true);
+    expect(played.some((p) => p.name === 'sleepy' || p.name === 'sigh')).toBe(true);
+  });
+
+  it('never interrupts listening, thinking or speaking, and can be switched off', () => {
+    const parts = build();
+    const life = new Life(parts.character, { sleepAfterMs: 1_000, everyMs: [100, 100] });
+    parts.character.setState('speaking');
+    for (let now = 0; now < 20_000; now += 50) life.update(now);
+    expect(parts.character.state).toBe('speaking');
+    expect(parts.character.expression).toBeNull();
+    parts.character.setState('idle');
+    life.enabled = false;
+    for (let now = 20_000; now < 40_000; now += 50) life.update(now);
+    expect(parts.character.state).toBe('idle');
+    expect(parts.character.expression).toBeNull();
   });
 });
