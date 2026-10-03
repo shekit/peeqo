@@ -1,7 +1,9 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { wakeWordReady } from '@peeqo/wakeword';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { createApi } from './server/api.ts';
+import { attachVoice } from './server/voice.ts';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -11,12 +13,21 @@ function peeqoApi(mode: string): Plugin {
   const api = createApi({
     openRouterKey: env.OPENROUTER_API_KEY,
     klipyKey: env.KLIPY_API,
+    home: env.PEEQO_HOME,
+    voice: wakeWordReady(),
     cacheDir: path.join(repoRoot, 'apps/sim/.cache'),
   });
+  const words = env.PEEQO_WAKE_WORDS ? env.PEEQO_WAKE_WORDS.split(',').map((w) => w.trim()) : undefined;
   return {
     name: 'peeqo-api',
-    configureServer: (server) => void server.middlewares.use(api),
-    configurePreviewServer: (server) => void server.middlewares.use(api),
+    configureServer: (server) => {
+      server.middlewares.use(api);
+      if (server.httpServer) attachVoice(server.httpServer as import('node:http').Server, words ? { words } : {});
+    },
+    configurePreviewServer: (server) => {
+      server.middlewares.use(api);
+      attachVoice(server.httpServer as import('node:http').Server, words ? { words } : {});
+    },
   };
 }
 

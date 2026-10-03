@@ -13,3 +13,6 @@ coverage/
 
 # simulator caches (GIF searches and media)
 apps/sim/.cache/
+
+# Python environment for the wake word detector
+packages/wakeword/.venv/

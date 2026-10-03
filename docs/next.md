@@ -4,10 +4,11 @@ The 2019 Electron app (`electron/`) is left as it was. The new software lives in
 and is developed against a simulator first. The same code will run on the robot.
 
 ```sh
-npm install          # once
-npm run sim          # the simulator, at http://localhost:5173
-npm run check        # typecheck, unit tests, production build
-npm run verify:sim   # drives the built simulator in Chrome
+npm install                          # once
+npm run setup -w @peeqo/wakeword     # once, for the wake word (Python 3.10 or newer)
+npm run sim                          # the simulator, at http://localhost:5173
+npm run check                        # typecheck, unit tests, production build
+npm run verify:sim                   # drives the built simulator in Chrome
 ```
 
 ## Packages
@@ -17,20 +18,24 @@ npm run verify:sim   # drives the built simulator in Chrome
 | `packages/core` | Neck kinematics, the safety governor, CAD collision tables, head animation, LED patterns. No DOM or Node APIs. |
 | `packages/face` | The screen face: expressive eyes (and the 2019 eyes), drawn on a canvas. |
 | `packages/character` | Peeqo as a character: states, expressions, synthesized sounds, and its life between conversations. |
-| `packages/brain` | The mind: OpenRouter model, Klipy GIFs, persona, conversation loop, and an offline stand-in. |
+| `packages/brain` | The mind: OpenRouter model, Klipy GIFs, persona, conversation loop, tools (time, timers, reminders, weather), and an offline stand-in. |
+| `packages/wakeword` | Wake word and speech detection: openWakeWord in a Python helper process that Node feeds audio to. |
 | `apps/sim` | The browser simulator, and the local API that holds the keys. See [its README](../apps/sim/README.md). |
 
 ## How a moment flows
 
 ```
-mic / text ─▶ Brain ─(OpenRouter: respond = words + expressions + GIF)─▶ BrainBody
-                                                                            │
-           ┌──────────────── Character (states, expressions) ◀─────────────┤
-           │                                                                │ GIF ─▶ face screen
-           ├─▶ HeadAnimator ─▶ MotionGovernor ─▶ servos (sim: 3D model)     │ words ─▶ voice / caption
-           ├─▶ ExpressiveFace ─▶ screen
-           ├─▶ LedAnimator ─▶ DotStar ring
-           └─▶ sounds ─▶ speaker
+mic ─▶ wake word ─▶ recording ─┐
+text ──────────────────────────┴─▶ Brain ─(OpenRouter: tools, then words + expressions + GIF)
+                                     │
+                                     ▼
+                                 BrainBody ─┬─▶ GIF ─▶ face screen
+                                            ├─▶ words ─▶ voice / caption
+                                            └─▶ Character (states, expressions)
+                                                  ├─▶ HeadAnimator ─▶ MotionGovernor ─▶ servos (sim: 3D model)
+                                                  ├─▶ ExpressiveFace ─▶ screen
+                                                  ├─▶ LedAnimator ─▶ DotStar ring
+                                                  └─▶ sounds ─▶ speaker
 ```
 
 ## Safety

@@ -1,0 +1,13 @@
+{
+  "name": "@peeqo/wakeword",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Wake word and voice-activity detection for Peeqo, using openWakeWord in a small Python helper process that Node feeds audio to. Node only (the robot, and the simulator's dev server).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "setup": "node setup.mjs"
+  }
+}

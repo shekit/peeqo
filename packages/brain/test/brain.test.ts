@@ -61,7 +61,7 @@ describe('OpenRouterModel', () => {
     const headers = requests[0]!.init.headers as Record<string, string>;
     expect(headers.Authorization).toBe(`Bearer ${KEY}`);
     const body = JSON.parse(String(requests[0]!.init.body));
-    expect(body).toMatchObject({ model: 'anthropic/claude-sonnet-5.5', tool_choice: 'auto', max_tokens: 400 });
+    expect(body).toMatchObject({ model: 'google/gemini-3.8-flash', tool_choice: 'auto', max_tokens: 400 });
     expect(body.tools[0].function.name).toBe('express');
     expect(reply.message.content).toBe('Hi!');
     expect(reply.message.tool_calls?.[0]?.function.name).toBe('express');

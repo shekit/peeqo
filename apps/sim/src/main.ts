@@ -29,10 +29,10 @@ import {
 } from '@peeqo/core';
 import { CHARACTER_STATES, Character, EXPRESSION_NAMES, Life, expressionSpec, isCharacterState, isExpressionName } from '@peeqo/character';
 import { CLASSIC_GLASSES_CYCLE, ClassicFace, EMOTIONS, ExpressiveFace, FACE_HEIGHT, FACE_WIDTH, isEmotion } from '@peeqo/face';
-import { Brain, KlipyClient, OpenRouterModel, ScriptedModel } from '@peeqo/brain';
+import { Alarms, Brain, KlipyClient, OpenRouterModel, ScriptedModel, Weather, alarmTools, clockTool, weatherTool, type Alarm } from '@peeqo/brain';
 import { WebSoundPlayer } from './audio/webSound.ts';
-import { createMic } from './brain/mic.ts';
 import { SimBody } from './brain/simBody.ts';
+import { VoiceInput } from './brain/voiceInput.ts';
 import { createTalkPanel } from './ui/talk.ts';
 import { GLASSES_URLS, LEGACY_REACTIONS, LEGACY_TRACKS, SOUND_URLS } from './content.ts';
 import { createCollisionProbe } from './scene/collisionProbe.ts';
@@ -265,44 +265,75 @@ async function main(): Promise<void> {
   });
   const offline = new ScriptedModel({ delayMs: 600 });
   let live: OpenRouterModel | null = null;
+  // Timers and reminders survive a page reload (kept in this browser); when one is due, Peeqo says so.
+  const alarms = new Alarms({
+    store: {
+      load: () => JSON.parse(localStorage.getItem('peeqo.alarms') ?? '[]') as Alarm[],
+      save: (list) => localStorage.setItem('peeqo.alarms', JSON.stringify(list)),
+    },
+  });
+  const weather = new Weather();
   const brain = new Brain({
     model: offline,
     body,
     voice: true,
+    tools: [clockTool, ...alarmTools(alarms), weatherTool(weather)],
     onEvent: (event) => {
       if (event.type === 'heard') talk.setStatus(`${brain.modelName}: thinking…`);
+      if (event.type === 'understood') talk.addLine('you', `${event.text} (spoken)`);
       if (event.type === 'reply') talk.setStatus(`${event.model}: answered in ${(event.ms / 1000).toFixed(1)} s`);
       if (event.type === 'error') talk.addLine('note', event.message);
-      if (event.type === 'tool' && event.name === 'show_gif') talk.addLine('note', `GIF: ${event.result}`);
+      if (event.type === 'tool' && event.name !== 'respond') talk.addLine('note', `${event.name}: ${event.result.slice(0, 120)}`);
     },
   });
+  alarms.onDue = (alarm) => {
+    poke();
+    void brain.announce(alarm.kind === 'timer' ? `Ding! Your ${alarm.label} is done!` : `Reminder: ${alarm.label}!`);
+  };
   const hear = (text: string) => {
     poke();
     talk.addLine('you', text);
     body.hush();
     return brain.hear(text);
   };
-  let heardSomething = false;
-  const mic = createMic({
-    onStart: () => {
+  // Speech goes to the model as a recording (no transcribing first); the wake word comes from openWakeWord on the
+  // dev server.
+  let wakeWordOn = false;
+  const voiceInput = new VoiceInput({
+    onWake: () => {
       poke();
-      body.hush(); // opening the mic cuts Peeqo off, as talking over someone would
-      heardSomething = false;
+      body.hush();
       brain.attend();
     },
-    onText: (text) => {
-      heardSomething = true;
-      void hear(text);
+    onUtterance: (wav) => {
+      poke();
+      body.hush();
+      if (brain.modelName === offline.name) talk.addLine('note', 'The offline brain cannot understand speech; choose the live brain.');
+      void brain.hear({ audio: wav });
     },
-    onState: (state) => {
-      talk.setMic(state);
-      if (state === 'idle' && !heardSomething) brain.dismiss();
-    },
+    onNothing: () => brain.dismiss(),
+    onState: (state) => talk.setMic(state === 'recording' ? 'listening' : 'idle'),
     onError: (message) => talk.addLine('note', message),
   });
   const talk = createTalkPanel(panelHost, {
     onSay: (text) => void hear(text),
-    onMic: () => mic.toggle(),
+    onMic: () => {
+      poke();
+      body.hush(); // speaking up cuts Peeqo off, as talking over someone would
+      brain.attend();
+      voiceInput
+        .open(wakeWordOn)
+        .then(() => voiceInput.record())
+        .catch((error: unknown) => {
+          talk.addLine('note', `Microphone: ${error instanceof Error ? error.message : String(error)}`);
+          brain.dismiss();
+        });
+    },
+    onWakeWord: (on) => {
+      wakeWordOn = on;
+      if (on) voiceInput.open(true).catch((error: unknown) => talk.addLine('note', `Microphone: ${error instanceof Error ? error.message : String(error)}`));
+      else voiceInput.setWakeWord(false);
+    },
     onVoice: (on) => {
       brain.voice = on;
     },
@@ -313,8 +344,10 @@ async function main(): Promise<void> {
   });
   // What the local API offers (it only exists under the dev server, npm run sim).
   void fetch('/api/status')
-    .then((r) => (r.ok ? (r.json() as Promise<{ model: boolean; gifs: boolean; gifsLeft: number }>) : null))
+    .then((r) => (r.ok ? (r.json() as Promise<{ model: boolean; gifs: boolean; gifsLeft: number; home: string | null; voice: boolean }>) : null))
     .then((status) => {
+      weather.home = status?.home ?? null;
+      talk.setWakeWord(status?.voice ?? false);
       if (status?.model) {
         live = new OpenRouterModel({ baseUrl: '/api/openrouter' });
         talk.setLive(true, live.name);
@@ -384,6 +417,7 @@ async function main(): Promise<void> {
     ledPattern: () => (ledAnimator.active ? ledAnimator.pattern : null),
     express,
     setCharacterState,
+    timers: () => alarms.list().map((a) => ({ id: a.id, kind: a.kind, label: a.label, inMs: a.dueMs - Date.now() })),
     talk: async (text: string) => {
       const turn = await hear(text);
       return { reply: turn.reply, expressions: turn.expressions, gif: turn.gif?.id ?? null, error: turn.error, interrupted: turn.interrupted };
@@ -402,6 +436,7 @@ async function main(): Promise<void> {
   };
 
   let last = performance.now();
+  let lastAlarmCheck = 0;
   let accumulator = 0;
   let ledVersion = -1;
   let first = true;
@@ -435,6 +470,11 @@ async function main(): Promise<void> {
     timers.advanceTo(now);
     character.update(now);
     life.update(now);
+    voiceInput.setDeaf(character.state === 'speaking'); // it would hear itself
+    if (now - lastAlarmCheck > 250) {
+      lastAlarmCheck = now;
+      alarms.update();
+    }
     ledAnimator.update(now);
     if (strip.version !== ledVersion) {
       robot.setLeds(strip.shown);

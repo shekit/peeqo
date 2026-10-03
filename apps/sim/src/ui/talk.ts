@@ -4,7 +4,10 @@ export type BrainMode = 'offline' | 'live';
 
 export interface TalkCallbacks {
   onSay(text: string): void;
+  /** Record what is said next and send it, as audio. */
   onMic(): void;
+  /** Keep listening for the wake word. */
+  onWakeWord(on: boolean): void;
   onVoice(on: boolean): void;
   onBrain(mode: BrainMode): void;
 }
@@ -15,6 +18,8 @@ export interface TalkPanel {
   /** Whether the live brain (OpenRouter, through the dev server) can be chosen. */
   setLive(available: boolean, label: string): void;
   setMic(state: 'idle' | 'listening' | 'unsupported'): void;
+  /** Whether the wake word can be used (the dev server's voice channel is set up). */
+  setWakeWord(available: boolean): void;
 }
 
 const MAX_LINES = 40;
@@ -24,8 +29,11 @@ export function createTalkPanel(host: HTMLElement, callbacks: TalkCallbacks): Ta
   const transcript = el('div', { class: 'transcript', 'aria-live': 'polite' });
   const input = el('input', { type: 'text', placeholder: 'Say something to Peeqo…', 'aria-label': 'Message', maxlength: 500 });
   const send = el('button', { type: 'button', text: 'Send' });
-  const mic = el('button', { type: 'button', text: 'Mic', title: 'Talk with your voice' });
+  const mic = el('button', { type: 'button', text: 'Mic', title: 'Say something: it is recorded and sent to the model as it is' });
   const voice = el('input', { type: 'checkbox', checked: true });
+  const wake = el('input', { type: 'checkbox', disabled: true });
+  const wakeLabel = el('label', { class: 'check', title: 'Needs npm run sim and npm run setup -w @peeqo/wakeword' }, wake, ' Wake word ("hey jarvis")');
+  wake.addEventListener('change', () => callbacks.onWakeWord(wake.checked));
   const brain = el(
     'select',
     { 'aria-label': 'Brain' },
@@ -55,7 +63,7 @@ export function createTalkPanel(host: HTMLElement, callbacks: TalkCallbacks): Ta
       'Talk to Peeqo',
       transcript,
       el('div', { class: 'talk-row' }, input, send, mic),
-      el('div', { class: 'row talk-options' }, el('label', { class: 'check' }, voice, ' Voice'), brain),
+      el('div', { class: 'row talk-options' }, el('label', { class: 'check' }, voice, ' Voice'), wakeLabel, brain),
       status,
     ),
   );
@@ -74,6 +82,10 @@ export function createTalkPanel(host: HTMLElement, callbacks: TalkCallbacks): Ta
       const option = brain.querySelector('option[value="live"]') as HTMLOptionElement;
       option.disabled = !available;
       option.textContent = available ? `live brain (${label})` : 'live brain (needs npm run sim and an OpenRouter key)';
+    },
+    setWakeWord(available) {
+      wake.disabled = !available;
+      wakeLabel.title = available ? 'Keep the microphone open and listen for "hey jarvis"' : 'Needs npm run sim and npm run setup -w @peeqo/wakeword';
     },
     setMic(state) {
       mic.disabled = state === 'unsupported';

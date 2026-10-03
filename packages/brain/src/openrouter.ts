@@ -8,9 +8,14 @@ export interface ToolCall {
   readonly function: { readonly name: string; readonly arguments: string };
 }
 
+/** Part of a person's message: words, or a recording of them speaking (audio-capable models only). */
+export type ContentPart =
+  | { readonly type: 'text'; readonly text: string }
+  | { readonly type: 'input_audio'; readonly input_audio: { readonly data: string; readonly format: 'wav' | 'mp3' } };
+
 export type ChatMessage =
   | { readonly role: 'system'; readonly content: string }
-  | { readonly role: 'user'; readonly content: string }
+  | { readonly role: 'user'; readonly content: string | readonly ContentPart[] }
   | { readonly role: 'assistant'; readonly content: string | null; readonly tool_calls?: readonly ToolCall[] }
   | { readonly role: 'tool'; readonly tool_call_id: string; readonly content: string };
 
@@ -51,7 +56,7 @@ export class ModelError extends Error {
 }
 
 export interface OpenRouterOptions {
-  /** OpenRouter model id (default: Claude Sonnet 5.5). */
+  /** OpenRouter model id (default: Gemini 3.8 Flash, which also understands speech). */
   readonly model?: string;
   /** API key. Leave out when calling through a proxy that adds it (the simulator's dev server does). */
   readonly apiKey?: string;
@@ -61,7 +66,8 @@ export interface OpenRouterOptions {
   readonly fetch?: typeof fetch;
 }
 
-export const DEFAULT_MODEL = 'anthropic/claude-sonnet-5.5';
+/** Hears speech directly (no transcribing first), calls tools, and answers quickly. */
+export const DEFAULT_MODEL = 'google/gemini-3.8-flash';
 const RETRY_DELAY_MS = 800;
 
 /** Chat completions through OpenRouter, with a timeout and one retry on rate limits or server errors. */

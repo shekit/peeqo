@@ -14,15 +14,20 @@ import { GifBudgetError, KlipyClient, type CachedSearch, type Gif } from '@peeqo
 export interface ApiOptions {
   readonly openRouterKey?: string | undefined;
   readonly klipyKey?: string | undefined;
+  /** The weather's home ("London", "Pune, India"), from PEEQO_HOME in .env. */
+  readonly home?: string | undefined;
+  /** Whether the wake word detector is set up. */
+  readonly voice?: boolean;
   /** Where searches and media are cached (gitignored). */
   readonly cacheDir: string;
 }
 
 type Next = (error?: unknown) => void;
-const MAX_BODY = 1_000_000;
+/** Room for a spoken message (a 20 s recording is about 0.9 MB as base64) plus the conversation. */
+const MAX_BODY = 4_000_000;
 const MEDIA_HOSTS = new Set(['static.klipy.com']);
-/** Models the proxy will pay for, and the longest reply it allows. */
-const ALLOWED_MODEL = /^anthropic\/claude-[\w.-]+$/;
+/** Models the proxy will pay for (Claude, and Gemini, which hears speech), and the longest reply it allows. */
+const ALLOWED_MODEL = /^(anthropic\/claude-|google\/gemini-)[\w.-]+$/;
 const MAX_TOKENS = 1000;
 const UPSTREAM_TIMEOUT_MS = 60_000;
 
@@ -31,7 +36,7 @@ const UPSTREAM_TIMEOUT_MS = 60_000;
  * a request from another site (another tab trying to spend the keys) is refused. Requests without those headers
  * are not from a web page (curl, scripts on this machine) and are allowed.
  */
-function fromThisPage(req: IncomingMessage): boolean {
+export function fromThisPage(req: IncomingMessage): boolean {
   const site = req.headers['sec-fetch-site'];
   if (site !== undefined && site !== 'same-origin' && site !== 'none') return false;
   const origin = req.headers.origin;
@@ -85,7 +90,7 @@ export function createApi(options: ApiOptions): (req: IncomingMessage, res: Serv
 
   async function handle(url: URL, req: IncomingMessage, res: ServerResponse): Promise<void> {
     if (url.pathname === '/api/status') {
-      sendJson(res, 200, { model: !!options.openRouterKey, gifs: !!klipy, gifsLeft: klipy?.remaining ?? 0 });
+      sendJson(res, 200, { model: !!options.openRouterKey, gifs: !!klipy, gifsLeft: klipy?.remaining ?? 0, home: options.home ?? null, voice: options.voice ?? false });
       return;
     }
     if (url.pathname === '/api/openrouter/chat/completions' && req.method === 'POST') {

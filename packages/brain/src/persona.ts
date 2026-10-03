@@ -67,6 +67,10 @@ export function respondTool(gifs: boolean): ToolSpec {
           ...(gifs
             ? { gif: { type: 'string', maxLength: 60, description: 'Optional: a short, vivid GIF search (2 to 4 words, e.g. "high five", "mind blown"). Now and then, about one turn in three.' } }
             : {}),
+          heard: {
+            type: 'string',
+            description: 'Only when they spoke to you (an audio clip) rather than typed: what they said, word for word. Empty if you could not make it out.',
+          },
           say: { type: 'string', description: 'What you say.' },
         },
         required: ['expressions', 'say'],
@@ -78,6 +82,10 @@ export function respondTool(gifs: boolean): ToolSpec {
 
 export interface PersonaContext {
   readonly now: Date;
+  /** What else the model can do (the time, timers, reminders, weather): shown so it knows to use them. */
+  readonly tools?: readonly string[];
+  /** Things that just happened (timers going off), so a reply to them makes sense. */
+  readonly recent?: readonly string[];
   /** Whether replies are spoken aloud (otherwise they appear as a short caption). */
   readonly voice: boolean;
   /** Whether show_gif is available. */
@@ -102,7 +110,12 @@ export function systemPrompt(context: PersonaContext): string {
       ? '- Your words are spoken aloud by your speaker, so write the way you would say them.'
       : '- You cannot speak right now: reply with at most five words, which appear as a caption, and let your expressions and GIFs do the talking.',
     "- If you don't know something or can't do it (you can't browse the web, see, or control other things yet), say so cheerfully. Never make up facts about the person.",
+    context.tools && context.tools.length > 0
+      ? `- You can also ${context.tools.join(', ')}. When asked, use those tools first, then respond with what you found (keep it short and natural).`
+      : null,
+    '- Sometimes you hear them speak (an audio clip) instead of typed words: listen, write what they said in heard, and answer that. If it is only noise or you cannot make it out, say so cheerfully.',
     '- If asked: you are a robot running on an AI model, designed and built by your person.',
+    context.recent && context.recent.length > 0 ? `Just now: ${context.recent.join('; ')}.` : null,
     `It is ${when}.`,
   ];
   return lines.filter((line): line is string => line !== null).join('\n');

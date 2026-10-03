@@ -333,6 +333,13 @@ try {
   s = await waitFor((x) => (x.output.status === 'ok') && x.emotion === 'neutral', 6000);
   check('brain: returns to idle after the turn', !!s && (await hook('character')).state === 'idle');
 
+  // Tools, offline: a timer is set by the stand-in brain and announced when it goes off.
+  turn = await hook('talk', 'set a timer for 8 seconds'); // long enough to outlast Peeqo saying so
+  const set = await hook('timers');
+  check('brain: sets a timer through its tools', turn.reply.startsWith('Timer set!') && set.length === 1, `${turn.reply} | ${JSON.stringify(set)}`);
+  const announced = await page.waitForFunction(() => [...document.querySelectorAll('.transcript .line')].some((l) => l.textContent.includes('Ding!')), null, { timeout: 15000 }).then(() => true, () => false);
+  check('brain: announces the timer when it goes off', announced && (await hook('timers')).length === 0);
+
   // A 2019 reaction with local media plays it on the face, as the 2019 robot did.
   await waitFor((x) => !x.showingMedia, 6000);
   await hook('react', 'ok');

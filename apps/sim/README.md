@@ -44,7 +44,7 @@ npm run check:clearance -w @peeqo/sim        # re-measures the real meshes at 50
 
 ## Brain
 
-`Brain` (`packages/brain`) is Peeqo's mind. In the sim, talk to it in the **Talk to Peeqo** box, or with the mic.
+`Brain` (`packages/brain`) is Peeqo's mind. In the sim, talk to it in the **Talk to Peeqo** box, or out loud.
 
 - **A turn:**
   - Peeqo thinks; the model answers with one `respond` call: its words, one or two expressions and sometimes a
@@ -53,18 +53,33 @@ npm run check:clearance -w @peeqo/sim        # re-measures the real meshes at 50
   - It speaks while any GIF plays on its face screen.
   - Its state follows along: listening, then thinking, then speaking, then idle.
 - **Offline brain (the default):** a scripted stand-in with written answers in Peeqo's voice. It needs no key
-  or network, and the tests use it.
-- **Live brain:** OpenRouter, defaulting to `anthropic/claude-sonnet-5.5`.
+  or network, and the tests use it. It can use the tools too, but cannot understand speech.
+- **Live brain:** OpenRouter, defaulting to `google/gemini-3.8-flash` (it takes audio and uses tools).
   - Put `OPENROUTER_API_KEY` (and `KLIPY_API` for GIFs) in the repo's `.env`, which git ignores.
   - Run `npm run sim`.
   - The dev server proxies the calls (`apps/sim/server/api.ts`), so the keys never reach the page.
   - The proxy only answers the simulator page itself; other sites are refused.
-  - It only passes on Claude models, with replies capped at 1,000 tokens.
+  - It only passes on Claude and Gemini models, with replies capped at 1,000 tokens.
+- **Voice:** what you say goes to the model as a recording, with no transcription step. The model writes down
+  what it heard, which shows in the transcript.
+  - **Mic:** records until you stop talking.
+  - **Wake word:** tick it and say "hey jarvis" (a ready-made openWakeWord model; "hey Peeqo" needs training).
+    It needs `npm run setup -w @peeqo/wakeword` once (Python 3.10 or newer); see `packages/wakeword`.
+  - The page streams the microphone to the dev server (`/api/voice`), where the detector also judges when you
+    have stopped talking. Without it set up, Mic still works and judges by loudness.
+  - Peeqo doesn't listen while it is talking, so it doesn't hear itself.
+- **Tools:** the model can check the time, set, list and cancel timers and reminders, and look up the weather.
+  - Timers and reminders are kept in the page (they survive a reload), and Peeqo announces them when due.
+  - Weather comes from Open-Meteo (free, no key). Set `PEEQO_HOME` in `.env` (e.g. `Pune, India`) so "what's the
+    weather?" needs no place.
+  - A turn that uses a tool takes two model calls: about 5 to 8 s with speech.
 - **GIFs:** come from Klipy.
   - Searches are cached on disk, and an hourly budget of 90 keeps under the key's 100.
   - Media is served from the dev server, so the face can draw it.
-- **Live check:** `node packages/brain/scripts/live-check.ts "hello"` talks to the real model from the terminal.
-- **On the robot:** the same `Brain` will call OpenRouter and Klipy directly, with the keys from its own `.env`.
+- **Live check:** `node packages/brain/scripts/live-check.ts "hello"` talks to the real model from the terminal;
+  `--speak` sends each line as speech (macOS).
+- **On the robot:** the same `Brain` will call OpenRouter and Klipy directly, with the keys from its own `.env`,
+  and the same wake word detector will listen to its microphone.
 
 ## Character
 

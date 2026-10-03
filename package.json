@@ -10,7 +10,7 @@
     "sim": "npm run dev -w @peeqo/sim",
     "build": "npm run build -w @peeqo/sim",
     "test": "vitest run",
-    "typecheck": "tsc -p packages/core && tsc -p packages/core/tsconfig.test.json && tsc -p packages/face && tsc -p packages/face/tsconfig.test.json && tsc -p packages/character && tsc -p packages/character/tsconfig.test.json && tsc -p packages/brain && tsc -p packages/brain/tsconfig.test.json && tsc -p apps/sim && tsc -p apps/sim/tsconfig.node.json",
+    "typecheck": "tsc -p packages/core && tsc -p packages/core/tsconfig.test.json && tsc -p packages/face && tsc -p packages/face/tsconfig.test.json && tsc -p packages/character && tsc -p packages/character/tsconfig.test.json && tsc -p packages/brain && tsc -p packages/brain/tsconfig.test.json && tsc -p packages/wakeword && tsc -p apps/sim && tsc -p apps/sim/tsconfig.node.json",
     "verify:sim": "npm run verify -w @peeqo/sim",
     "check": "npm run typecheck && npm test && npm run build"
   },

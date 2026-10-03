@@ -14,6 +14,20 @@ export interface ScriptRule {
   readonly gif?: string;
   /** What to say; one is picked at random. A function can use the request (the time, the words heard). */
   readonly say: readonly string[] | ((context: { heard: string; time: string | null }) => string);
+  /** A tool to use first, when it is offered: its name and arguments, from the words heard (null: none fits). */
+  readonly tool?: (heard: string) => { readonly name: string; readonly args: Record<string, unknown> } | null;
+  /** What to say once that tool has answered. */
+  readonly after?: (result: string) => string;
+}
+
+const UNIT = { s: 'seconds', sec: 'seconds', second: 'seconds', m: 'minutes', min: 'minutes', minute: 'minutes', h: 'hours', hr: 'hours', hour: 'hours' } as const;
+const amount = /(\d+(?:\.\d+)?)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?)\b/i;
+/** "5 minutes" → { minutes: 5 }. */
+function duration(text: string): Record<string, number> | null {
+  const m = amount.exec(text);
+  if (!m) return null;
+  const unit = UNIT[m[2]!.toLowerCase().replace(/s$/, '') as keyof typeof UNIT] ?? 'minutes';
+  return { [unit]: Number(m[1]) };
 }
 
 const arithmetic = /(-?\d+(?:\.\d+)?)\s*(\+|-|\*|x|times|plus|minus|divided by|\/)\s*(-?\d+(?:\.\d+)?)/i;
@@ -31,6 +45,58 @@ function solve(heard: string): string | null {
 
 /** Peeqo's scripted answers, most specific first; the last rule catches everything else. */
 export const PEEQO_SCRIPT: readonly ScriptRule[] = [
+  {
+    match: /\bcancel\b.*\b(timers?|reminders?|alarms?)\b/i,
+    express: ['yes'],
+    tool: () => ({ name: 'cancel_timer', args: { all: true } }),
+    after: (result) => (result.startsWith('cancelled') ? 'Done, all cancelled!' : 'There was nothing to cancel.'),
+    say: ["I can't cancel anything without my timer tools."],
+  },
+  {
+    match: /\b(how long|time left|my timers|any timers|what timers|my reminders|any reminders)\b/i,
+    express: ['thinking'],
+    tool: () => ({ name: 'list_timers', args: {} }),
+    after: (result) => (result === 'no timers or reminders' ? 'No timers or reminders right now.' : `Here's what's ticking: ${result.replace(/; /g, ', ')}.`),
+    say: ["I don't have my timer tools right now."],
+  },
+  {
+    match: /\bremind me\b/i,
+    express: ['yes'],
+    tool: (heard) => {
+      const time = duration(heard);
+      const what = /remind me (?:to |about )?(.+?)(?: in \d.*)?$/i.exec(heard.replace(/[.!?]+$/, ''))?.[1]?.replace(/^in \d+\s*\w+\s*(to )?/i, '');
+      if (!time || !what) return null;
+      const minutes = (time.hours ?? 0) * 60 + (time.minutes ?? 0) + (time.seconds ?? 0) / 60;
+      return { name: 'set_reminder', args: { text: what, in_minutes: Math.max(1, minutes) } };
+    },
+    after: (result) => (result.startsWith('error') ? "Hmm, I couldn't set that reminder." : `Got it! I'll remind you ${/set for (in [^(]+)/.exec(result)?.[1]?.trim() ?? 'later'}.`),
+    say: ['Remind you when? Try "remind me in 10 minutes to stretch".'],
+  },
+  {
+    match: /\btimer\b/i,
+    express: ['yes'],
+    tool: (heard) => {
+      const time = duration(heard);
+      return time ? { name: 'set_timer', args: time } : null;
+    },
+    after: (result) => (result.startsWith('error') ? "Hmm, I couldn't set that timer." : `Timer set! It goes off ${/goes off (in [^(]+)/.exec(result)?.[1]?.trim() ?? 'soon'}.`),
+    say: ['How long should the timer be? Try "set a timer for 5 minutes".'],
+  },
+  {
+    match: /\b(weather|forecast|temperature|raining|sunny|cold outside|hot outside)\b/i,
+    express: ['curious'],
+    tool: (heard) => {
+      const place = /\b(?:in|for|at) ([A-Za-z][A-Za-z .,'-]*?)(?:\s+(?:today|tomorrow|now|right now|this week))?[?.!]*$/i.exec(heard)?.[1];
+      return { name: 'get_weather', args: place ? { place } : {} };
+    },
+    after: (result) => {
+      if (result.startsWith('error: no place')) return 'Where are you? Tell me your town and I will check.';
+      if (result.startsWith('error')) return "I couldn't get the weather just now.";
+      const [place, rest] = result.split('. Now: ');
+      return `In ${place?.split(',')[0]} right now: ${rest?.split('.')[0] ?? 'no idea'}.`;
+    },
+    say: ["I can't see outside from this desk, but I'm forecasting a high chance of you being awesome."],
+  },
   {
     match: arithmetic,
     express: ['thinking', 'yes'],
@@ -63,7 +129,6 @@ export const PEEQO_SCRIPT: readonly ScriptRule[] = [
   { match: /\b(thanks|thank you|cheers)\b/i, express: ['shy'], say: ['Aw shucks. Anytime!'] },
   { match: /\b(how are you|how's it going|how do you feel)\b/i, express: ['happy'], say: ['Fully charged and slightly wobbly, so: excellent! You?'] },
   { match: /\b(hi|hello|hey|yo|howdy|morning|evening)\b/i, express: ['hello'], say: ['Hey hey! Peeqo, at your service. Well, mostly at your desk.', 'Hi! I was just practising my blinking. Nailed it.'] },
-  { match: /\b(weather|rain|sunny|snow|outside)\b/i, express: ['thinking', 'wink'], say: ["I can't see outside from this desk, but I'm forecasting a high chance of you being awesome."] },
   { match: /\b(scary|ghost|spider|boo|monster)\b/i, express: ['scared'], say: ["Eep! Don't do that, my eyes almost fell off."] },
   { match: /\b(guess what|surprise|news|you won't believe)\b/i, express: ['surprised'], say: ['Ooh! Tell me tell me tell me!'] },
   { match: /\b(coffee|tea|espresso)\b/i, express: ['excited'], say: ["Coffee! I can't drink it, but I can definitely jitter like I did."] },
@@ -102,14 +167,31 @@ export class ScriptedModel implements ChatModel {
     signal?.throwIfAborted();
     const messages = request.messages;
     const lastUser = [...messages].reverse().find((m) => m.role === 'user');
-    const heard = lastUser?.content ?? '';
+    const content = lastUser?.content ?? '';
+    const heard = typeof content === 'string' ? content : content.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join(' ');
+    const spoken = typeof content !== 'string' && content.some((part) => part.type === 'input_audio');
+    const tools = new Set(request.tools?.map((t) => t.function.name) ?? []);
+    if (spoken) {
+      // A recording: the stand-in cannot listen, and says so in character.
+      const say = "I can hear you, but my offline brain can't understand speech. Switch me to the live brain, or type!";
+      return tools.has('respond')
+        ? { message: { role: 'assistant', content: null, tool_calls: [this.#call('respond', { expressions: ['confused'], heard: '', say })] }, finishReason: 'tool_calls' }
+        : { message: { role: 'assistant', content: say }, finishReason: 'stop' };
+    }
     const system = messages.find((m) => m.role === 'system')?.content ?? '';
-    const time = /^It is (.+)\.$/m.exec(system)?.[1] ?? null; // the persona's last line
+    const time = /^It is (.+)\.$/m.exec(typeof system === 'string' ? system : '')?.[1] ?? null; // the persona's last line
     const rule = this.#rules.find((r) => r.match.test(heard)) ?? this.#rules[this.#rules.length - 1]!;
     const text = typeof rule.say === 'function' ? rule.say({ heard, time: time ? clockOf(time) : null }) : rule.say[Math.floor(this.#random() * rule.say.length)]!;
-    // A follow-up after tool results: just the words.
-    if (messages[messages.length - 1]?.role === 'tool') return { message: { role: 'assistant', content: text }, finishReason: 'stop' };
-    const tools = new Set(request.tools?.map((t) => t.function.name) ?? []);
+    const last = messages[messages.length - 1];
+    if (last?.role === 'tool') {
+      // After a tool has answered: words made from its answer (as respond, when that is offered).
+      const say = rule.after ? rule.after(last.content) : text;
+      return tools.has('respond')
+        ? { message: { role: 'assistant', content: null, tool_calls: [this.#call('respond', { expressions: rule.express, say })] }, finishReason: 'tool_calls' }
+        : { message: { role: 'assistant', content: say }, finishReason: 'stop' };
+    }
+    const use = rule.tool?.(heard);
+    if (use && tools.has(use.name)) return { message: { role: 'assistant', content: null, tool_calls: [this.#call(use.name, use.args)] }, finishReason: 'tool_calls' };
     if (tools.has('respond')) {
       const offersGifs = request.tools?.some((t) => t.function.name === 'respond' && 'gif' in ((t.function.parameters as { properties?: object }).properties ?? {}));
       const args = { expressions: rule.express, say: text, ...(rule.gif && offersGifs ? { gif: rule.gif } : {}) };

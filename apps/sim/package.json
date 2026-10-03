@@ -18,14 +18,17 @@
     "@peeqo/character": "*",
     "@peeqo/core": "*",
     "@peeqo/face": "*",
+    "@peeqo/wakeword": "*",
     "three": "^0.186.1"
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.5.1",
     "@types/three": "^0.186.0",
+    "@types/ws": "^8.18.2",
     "occt-import-js": "^0.0.23",
     "playwright-core": "^1.63.0",
     "three-mesh-bvh": "^0.9.15",
-    "vite": "^8.3.1"
+    "vite": "^8.3.1",
+    "ws": "^8.22.0"
   }
 }
