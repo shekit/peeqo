@@ -10,3 +10,6 @@ coverage/
 .env
 .env.*
 !.env.example
+
+# simulator caches (GIF searches and media)
+apps/sim/.cache/

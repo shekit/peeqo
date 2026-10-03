@@ -29,7 +29,11 @@ import {
 } from '@peeqo/core';
 import { CHARACTER_STATES, Character, EXPRESSION_NAMES, expressionSpec, isCharacterState, isExpressionName } from '@peeqo/character';
 import { CLASSIC_GLASSES_CYCLE, ClassicFace, EMOTIONS, ExpressiveFace, FACE_HEIGHT, FACE_WIDTH, isEmotion } from '@peeqo/face';
+import { Brain, KlipyClient, OpenRouterModel, ScriptedModel } from '@peeqo/brain';
 import { WebSoundPlayer } from './audio/webSound.ts';
+import { createMic } from './brain/mic.ts';
+import { SimBody } from './brain/simBody.ts';
+import { createTalkPanel } from './ui/talk.ts';
 import { GLASSES_URLS, LEGACY_REACTIONS, LEGACY_TRACKS, SOUND_URLS } from './content.ts';
 import { createCollisionProbe } from './scene/collisionProbe.ts';
 import { createRobot } from './scene/robot.ts';
@@ -232,6 +236,63 @@ async function main(): Promise<void> {
     },
   );
 
+  // ---- the brain: offline (scripted) by default; live through the dev server's OpenRouter proxy when available ----
+  const body = new SimBody({
+    character,
+    face: expressive,
+    takeHead: () => {
+      player = null;
+      toAnimator();
+      faceStyle = 'expressive';
+    },
+    caption: (text) => talk.addLine('peeqo', text),
+  });
+  const offline = new ScriptedModel({ delayMs: 600 });
+  let live: OpenRouterModel | null = null;
+  const brain = new Brain({
+    model: offline,
+    body,
+    voice: true,
+    onEvent: (event) => {
+      if (event.type === 'reply') talk.setStatus(`${event.model}: answered in ${(event.ms / 1000).toFixed(1)} s`);
+      if (event.type === 'error') talk.addLine('note', event.message);
+      if (event.type === 'tool' && event.name === 'show_gif') talk.addLine('note', `GIF: ${event.result}`);
+    },
+  });
+  const hear = (text: string) => {
+    talk.addLine('you', text);
+    body.hush();
+    return brain.hear(text);
+  };
+  const mic = createMic({
+    onStart: () => brain.attend(),
+    onText: (text) => void hear(text),
+    onState: (state) => talk.setMic(state),
+    onError: (message) => talk.addLine('note', message),
+  });
+  const talk = createTalkPanel(panelHost, {
+    onSay: (text) => void hear(text),
+    onMic: () => mic.toggle(),
+    onVoice: (on) => {
+      brain.voice = on;
+    },
+    onBrain: (mode) => {
+      brain.useModel(mode === 'live' && live ? live : offline);
+      talk.setStatus(mode === 'live' && live ? `Live brain: ${live.name} through OpenRouter.` : 'Offline brain: scripted answers, no network.');
+    },
+  });
+  // What the local API offers (it only exists under the dev server, npm run sim).
+  void fetch('/api/status')
+    .then((r) => (r.ok ? (r.json() as Promise<{ model: boolean; gifs: boolean; gifsLeft: number }>) : null))
+    .then((status) => {
+      if (status?.model) {
+        live = new OpenRouterModel({ baseUrl: '/api/openrouter' });
+        talk.setLive(true, live.name);
+      } else talk.setLive(false, '');
+      if (status?.gifs) brain.useGifs(new KlipyClient({ baseUrl: '/api/gifs', perHour: 1000 })); // the server keeps the real budget
+    })
+    .catch(() => talk.setLive(false, ''));
+
   window.__peeqo = {
     state: () => ({
       output: governor.output,
@@ -243,6 +304,7 @@ async function main(): Promise<void> {
       faceStyle,
       eyes: faceStyle === 'classic' ? classic.eyeRadii : expressive.state().eyes[0],
       emotion: expressive.emotion,
+      showingMedia: expressive.showingMedia,
     }),
     /** Largest gap (mm) between the drawn horn tips and the kinematics, to prove the model matches the maths. */
     hornTipError: () => {
@@ -292,6 +354,14 @@ async function main(): Promise<void> {
     ledPattern: () => (ledAnimator.active ? ledAnimator.pattern : null),
     express,
     setCharacterState,
+    talk: async (text: string) => {
+      const turn = await hear(text);
+      return { reply: turn.reply, expressions: turn.expressions, gif: turn.gif?.id ?? null, error: turn.error, interrupted: turn.interrupted };
+    },
+    setVoice: (on: boolean) => {
+      brain.voice = on;
+    },
+    brainModel: () => brain.modelName,
     character: () => ({ state: character.state, expression: character.expression }),
     react,
     setView: (name: ViewName) => stage.setView(name),

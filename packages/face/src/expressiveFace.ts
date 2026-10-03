@@ -120,6 +120,16 @@ const GAZE_PX = { x: 38, y: 26 };
 const SHAPE_KEYS = ['open', 'scale', 'wide', 'lid', 'slant', 'smile', 'dy', 'heart', 'shine'] as const;
 const BLINK = { closeMs: 70, shutMs: 35, openMs: 140 };
 
+/** A picture or video to show on the screen (a GIF reaction), with its natural size. */
+export interface ScreenMedia {
+  readonly source: CanvasImageSource;
+  readonly width: number;
+  readonly height: number;
+}
+
+const MEDIA_FADE_IN_MS = 220;
+const MEDIA_FADE_OUT_MS = 280;
+
 export interface ExpressiveFaceOptions {
   /** Seed for blinks and glances, so a run can be replayed exactly. */
   readonly seed?: number;
@@ -157,6 +167,7 @@ export class ExpressiveFace {
   #blinking = true;
   #lastMs: number | null = null;
   #glasses: CanvasImageSource | null = null;
+  #media: { readonly media: ScreenMedia; readonly startMs: number; readonly endMs: number } | null = null;
 
   constructor(options: ExpressiveFaceOptions = {}) {
     this.#random = seededRandom(options.seed ?? 1);
@@ -183,6 +194,22 @@ export class ExpressiveFace {
 
   setGlasses(image: CanvasImageSource | null): void {
     this.#glasses = image;
+  }
+
+  /** Shows a picture or video in place of the eyes for a while, fading in and out. */
+  showMedia(media: ScreenMedia, nowMs: number, durationMs: number): void {
+    if (!(media.width > 0 && media.height > 0) || !(durationMs > 0)) throw new Error('Media needs a size and a duration');
+    this.#media = { media, startMs: nowMs, endMs: nowMs + durationMs };
+  }
+
+  /** Ends any media now (it fades out). */
+  hideMedia(nowMs: number): void {
+    if (this.#media && this.#media.endMs > nowMs) this.#media = { ...this.#media, endMs: nowMs };
+  }
+
+  /** Whether media is on the screen (including its fades) at the last update. */
+  get showingMedia(): boolean {
+    return this.#mediaAlpha(this.#lastMs ?? 0) > 0;
   }
 
   /** Turns the automatic blinking on or off (a blink in progress finishes). */
@@ -273,6 +300,30 @@ export class ExpressiveFace {
       drawEye(ctx, ex, ey, rx * squash * beat, fullRy * beat, open, s, e === 0 ? 1 : -1);
     }
     if (this.#glasses) ctx.drawImage(this.#glasses, 0, 0, FACE_WIDTH, FACE_HEIGHT);
+    const alpha = this.#mediaAlpha(this.#lastMs ?? 0);
+    if (alpha > 0 && this.#media) {
+      const { source, width, height } = this.#media.media;
+      const scale = Math.min(FACE_WIDTH / width, FACE_HEIGHT / height);
+      const w = width * scale;
+      const h = height * scale;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, FACE_WIDTH, FACE_HEIGHT);
+      ctx.drawImage(source, (FACE_WIDTH - w) / 2, (FACE_HEIGHT - h) / 2, w, h);
+      ctx.restore();
+    }
+  }
+
+  /** Media opacity: fades in, holds, fades out; 0 when nothing is showing. */
+  #mediaAlpha(nowMs: number): number {
+    const m = this.#media;
+    if (!m) return 0;
+    if (nowMs < m.startMs) return 0;
+    if (nowMs >= m.endMs + MEDIA_FADE_OUT_MS) return 0;
+    const fadeIn = Math.min(1, (nowMs - m.startMs) / MEDIA_FADE_IN_MS);
+    const fadeOut = nowMs <= m.endMs ? 1 : 1 - (nowMs - m.endMs) / MEDIA_FADE_OUT_MS;
+    return Math.max(0, Math.min(fadeIn, fadeOut));
   }
 
   /** Eye openness from the blink: quick close, a brief shut, a slower open. */

@@ -13,6 +13,7 @@ import {
   type SafetyLimits,
 } from '@peeqo/core';
 import { VIEWS, type ViewName } from '../scene/stage.ts';
+import { el, section } from './dom.ts';
 import { EnvelopePlot } from './envelopePlot.ts';
 
 export interface PanelCallbacks {
@@ -62,24 +63,6 @@ export interface Panel {
   update(output: GovernorOutput, playing: string | null, clearance: ClearanceReading | null, gesture: string | null, expression: string | null, state: string): void;
   /** Moves the sliders to show a target (without triggering onTarget). */
   showTarget(pose: Pose): void;
-}
-
-type Attrs = Record<string, string | number | boolean>;
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs = {}, ...children: (Node | string)[]): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  for (const [key, value] of Object.entries(attrs)) {
-    if (key === 'text') node.textContent = String(value);
-    else if (typeof value === 'boolean') {
-      if (value) node.setAttribute(key, '');
-    } else node.setAttribute(key, String(value));
-  }
-  node.append(...children);
-  return node;
-}
-
-function section(title: string, ...children: (Node | string)[]): HTMLElement {
-  return el('section', {}, el('h2', { text: title }), ...children);
 }
 
 const fmt = (value: number, digits = 1) => (Object.is(Math.round(value * 10 ** digits), -0) ? 0 : value).toFixed(digits);

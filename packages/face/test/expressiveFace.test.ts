@@ -149,6 +149,27 @@ describe('ExpressiveFace', () => {
     expect(trace(9)).not.toEqual(trace(10));
   });
 
+  it('shows media in place of the eyes, fading in and out', () => {
+    const face = new ExpressiveFace({ seed: 7 });
+    let now = run(face, 0, 0.2);
+    const media = { source: {} as CanvasImageSource, width: 640, height: 414 };
+    face.showMedia(media, now, 1000);
+    expect(face.showingMedia).toBe(false); // starts fading in from the next update
+    now = run(face, now, 0.5);
+    expect(face.showingMedia).toBe(true);
+    const ctx = recordingContext();
+    face.draw(ctx);
+    expect(ctx.calls).toContain('drawImage');
+    now = run(face, now, 0.85);
+    expect(face.showingMedia).toBe(false);
+    face.showMedia(media, now, 5000);
+    now = run(face, now, 0.3);
+    face.hideMedia(now);
+    run(face, now, 0.35);
+    expect(face.showingMedia).toBe(false);
+    expect(() => face.showMedia({ ...media, width: 0 }, now, 100)).toThrow(/size/);
+  });
+
   it('rejects unknown emotions', () => {
     expect(() => new ExpressiveFace().setEmotion('smug' as Emotion)).toThrow(/Unknown emotion/);
   });

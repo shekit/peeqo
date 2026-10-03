@@ -309,3 +309,50 @@ footer {
 .mute {
   margin-top: 8px;
 }
+
+.transcript {
+  height: 150px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: #f6f8fa;
+  font-size: 12px;
+}
+
+.transcript .line {
+  margin: 2px 0;
+  line-height: 1.4;
+}
+
+.transcript .line.peeqo b {
+  color: var(--accent);
+}
+
+.transcript .line.note {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.talk-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.talk-row input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.talk-options {
+  margin-top: 6px;
+}
+
+.talk-status {
+  margin: 6px 0 0;
+}

@@ -42,6 +42,28 @@ npm run check:clearance -w @peeqo/sim        # re-measures the real meshes at 50
    - **Independent checks:** `check:clearance` and `verify:sim` re-measure the real meshes at poses the core
      accepts, including poses on the edge of the safe range, and fail if any gap is smaller than promised.
 
+## Brain
+
+`Brain` (`packages/brain`) is Peeqo's mind. In the sim, talk to it in the **Talk to Peeqo** box, or with the mic.
+
+- **A turn:**
+  - Peeqo thinks; the model answers with one `respond` call: its words, one or two expressions and sometimes a
+    GIF search, all in one round trip (about 2 s).
+  - It shows how it feels.
+  - It speaks while any GIF plays on its face screen.
+  - Its state follows along: listening, then thinking, then speaking, then idle.
+- **Offline brain (the default):** a scripted stand-in with written answers in Peeqo's voice. It needs no key
+  or network, and the tests use it.
+- **Live brain:** OpenRouter, defaulting to `anthropic/claude-sonnet-5.5`.
+  - Put `OPENROUTER_API_KEY` (and `KLIPY_API` for GIFs) in the repo's `.env`, which git ignores.
+  - Run `npm run sim`.
+  - The dev server proxies the calls (`apps/sim/server/api.ts`), so the keys never reach the page.
+- **GIFs:** come from Klipy.
+  - Searches are cached on disk, and an hourly budget of 90 keeps under the key's 100.
+  - Media is served from the dev server, so the face can draw it.
+- **Live check:** `node packages/brain/scripts/live-check.ts "hello"` talks to the real model from the terminal.
+- **On the robot:** the same `Brain` will call OpenRouter and Klipy directly, with the keys from its own `.env`.
+
 ## Character
 
 `Character` (`packages/character`) is Peeqo as a character. Everything above (head, face, ring, voice) is

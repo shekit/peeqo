@@ -1,0 +1,13 @@
+{
+  "name": "@peeqo/brain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Peeqo's mind: talks through an AI model on OpenRouter, shows how it feels through the character (expressions, GIFs, voice), and finds GIFs on Klipy. Uses only fetch, so it runs on the robot (Node) and behind the simulator's local proxy.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@peeqo/character": "*"
+  }
+}

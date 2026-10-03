@@ -31,9 +31,25 @@ const types = {
   '.wav': 'audio/wav', '.glb': 'model/gltf-binary', '.json': 'application/json', '.svg': 'image/svg+xml',
 };
 const problems = [];
+// Stand-ins for the dev server's local API (the built page has none): no model key, and a GIF search that always
+// finds the 2019 "shrug" clip from the repo, so no real searches are spent.
+const shrug = fileURLToPath(new URL('../../../electron/app/media/responses/confused/shrug.mp4', import.meta.url));
+const stubApi = {
+  '/api/status': () => ({ type: 'application/json', body: JSON.stringify({ model: false, gifs: true, gifsLeft: 90 }) }),
+  '/api/gifs/search': () => ({
+    type: 'application/json',
+    body: JSON.stringify({ results: [{ id: 'stub-shrug', title: 'shrug', media_formats: { mp4: { url: '/api/gifs/media?u=stub', dims: [480, 270] } } }], next: '' }),
+  }),
+  '/api/gifs/media': () => ({ type: 'video/mp4', body: fs.readFileSync(shrug) }),
+};
 const server = http
   .createServer((req, res) => {
     const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    if (stubApi[pathname]) {
+      const { type, body } = stubApi[pathname]();
+      res.writeHead(200, { 'Content-Type': type }).end(body);
+      return;
+    }
     const file = path.join(dist, pathname === '/' ? 'index.html' : pathname);
     if (!file.startsWith(dist) || !fs.existsSync(file)) {
       problems.push(`[server 404] ${pathname}`);
@@ -299,6 +315,23 @@ try {
   s = await state();
   check('state "listening": attentive face and listening ring', s.emotion === 'listening' && (await hook('ledPattern')) === 'listen');
   await hook('setCharacterState', 'idle');
+
+  // The brain (the offline stand-in): it hears, thinks, shows how it feels, plays a GIF and answers.
+  await hook('setVoice', false); // no speech in a headless browser; replies are captions
+  let turn = await hook('talk', 'Hello Peeqo!');
+  check('brain: answers a greeting with words and an expression', turn.reply.length > 0 && turn.expressions.includes('hello') && !turn.error, JSON.stringify(turn));
+  const pendingTurn = hook('talk', 'show me a cat');
+  s = await waitFor((x) => x.showingMedia, 6000);
+  if (s) {
+    await hook('setView', 'face');
+    await page.waitForTimeout(500);
+    await shot('12-brain-gif');
+    await hook('setView', 'three-quarter');
+  }
+  turn = await pendingTurn;
+  check('brain: finds a GIF and shows it on the face', !!s && turn.gif === 'stub-shrug' && turn.expressions.includes('excited'), JSON.stringify(turn));
+  s = await waitFor((x) => (x.output.status === 'ok') && x.emotion === 'neutral', 6000);
+  check('brain: returns to idle after the turn', !!s && (await hook('character')).state === 'idle');
 } catch (error) {
   check('run completed', false, error.message);
 }
