@@ -16,3 +16,4 @@ export * from './legacy.ts';
 export * from './scheduler.ts';
 export * from './dotstar.ts';
 export * from './classicLeds.ts';
+export * from './ledAnimator.ts';

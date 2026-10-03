@@ -25,6 +25,7 @@ export interface PanelCallbacks {
   onAnimation(name: string): void;
   onReaction(name: string): void;
   onLeds(animation: ClassicLedAnimation, color: ClassicLedColor): void;
+  onLedPattern(name: string, color: string | undefined): void;
   onGlasses(name: string | null): void;
   onBlink(): void;
   onFaceStyle(style: 'expressive' | 'classic'): void;
@@ -47,6 +48,8 @@ export interface PanelOptions {
   readonly idle: boolean;
   readonly emotions: readonly string[];
   readonly faceStyle: 'expressive' | 'classic';
+  readonly ledPatterns: readonly { readonly name: string; readonly description: string }[];
+  readonly ledColors: readonly string[];
 }
 
 export interface Panel {
@@ -217,7 +220,25 @@ export function createPanel(host: HTMLElement, options: PanelOptions, callbacks:
     const animation = CLASSIC_LED_ANIMATIONS.find((a) => a === ledAnim.value);
     if (animation && isClassicLedColor(color)) callbacks.onLeds(animation, color);
   });
-  host.append(section('LED ring (2019 animations)', el('div', { class: 'row' }, ledAnim, ledColor, ledPlay)));
+  const patternColor = el('select', { 'aria-label': 'Pattern colour' }, el('option', { value: '', text: 'its own colour' }), ...options.ledColors.map((c) => el('option', { value: c, text: c })));
+  const patternButtons = el(
+    'div',
+    { class: 'buttons' },
+    ...options.ledPatterns.map(({ name, description }) => {
+      const b = el('button', { type: 'button', text: name, title: description, 'data-name': name });
+      b.addEventListener('click', () => callbacks.onLedPattern(name, patternColor.value || undefined));
+      return b;
+    }),
+  );
+  host.append(
+    section(
+      'LED ring',
+      patternButtons,
+      el('div', { class: 'row led-row' }, patternColor),
+      el('p', { class: 'muted small', text: '2019 animations:' }),
+      el('div', { class: 'row' }, ledAnim, ledColor, ledPlay),
+    ),
+  );
 
   // ---- face ----
   const glasses = el('select', { 'aria-label': 'Glasses' }, el('option', { value: '', text: 'no glasses' }), ...options.glasses.map((g) => el('option', { value: g, text: g })));

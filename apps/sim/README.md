@@ -72,6 +72,19 @@ glasses overlays still fit.
   micro-saccades between them, and a gaze that follows the emotion. It can also be told where to look.
 - **2019 eyes:** still available from the panel or with `?face=classic`.
 
+## LED ring
+
+`LedAnimator` (`packages/core`) drives the 12 DotStar LEDs with smooth, time-based patterns.
+
+- **Looping:** glow, breathe, heartbeat, spin, listen, speak (follows a voice level) and rainbow.
+- **Sparkle:** random twinkles that flash toward white at their peak.
+- **One-shots:** success, error and wake. Each returns to whatever was looping before.
+- **Quality:**
+  - patterns crossfade;
+  - output is gamma-corrected;
+  - output combines the LEDs' 5-bit brightness with their 8-bit colour, so dim fades stay smooth.
+- **2019 animations:** still available. Whichever animation started last drives the ring.
+
 ## Neck (dev kit, from the CAD)
 
 - **Servos:** shafts 27.32 mm from the centre, 42 mm up. Each servo has a U-horn with its hubs.

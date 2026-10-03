@@ -1,12 +1,5 @@
 import * as THREE from 'three';
-import type { LedPixel } from '@peeqo/core';
-
-/**
- * Where the 12 DotStar LEDs sit around the ring, in the head frame (degrees from +X toward +Y).
- * Assumed until checked on the robot: LED 0 just to the right of the front, numbering on toward Peeqo's
- * right, so the 2019 "circle" animation starts at the front and meets at the back.
- */
-export const LED_RING_LAYOUT = { count: 12, firstLedDeg: -15, stepDeg: -30 } as const;
+import { LED_RING_LAYOUT, type LedPixel } from '@peeqo/core';
 
 const vertexShader = /* glsl */ `
   varying vec3 vLocal;

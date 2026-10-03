@@ -36,6 +36,11 @@ export class VirtualScheduler {
   clear(id: number | null | undefined): void {
     if (id != null) this.#tasks.delete(id);
   }
+  /** Cancels every pending timeout and interval. */
+  clearAll(): void {
+    this.#tasks.clear();
+  }
+
 
   /** Runs every callback due up to and including nowMs, in time order (ties in scheduling order). */
   advanceTo(nowMs: number): void {

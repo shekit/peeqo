@@ -252,6 +252,21 @@ try {
     await page.waitForTimeout(40);
   }
   check('idle: the head stays alive (breathing, drifting), small and safe', idleWorst === 'ok' && idleTilt + idleHeave > 0.05 && idleTilt < 3 && idleHeave < 1, `${idleWorst}; up to ${idleTilt.toFixed(2)}° and ${idleHeave.toFixed(2)} mm`);
+
+  // New LED patterns: they light the ring, crossfade, and one-shots return to what was looping.
+  await hook('playLedPattern', 'rainbow');
+  s = await waitFor((x) => x.litLeds.length === 12, 2000);
+  check('LED pattern "rainbow" lights the whole ring', !!s);
+  await hook('setView', 'three-quarter');
+  await page.waitForTimeout(400);
+  await shot('10-leds-rainbow');
+  await hook('playLedPattern', 'spin', 'aqua');
+  await hook('playLedPattern', 'success');
+  await page.waitForTimeout(1900);
+  check('one-shot "success" returns to the looping pattern', (await hook('ledPattern')) === 'spin', String(await hook('ledPattern')));
+  await hook('playLedPattern', 'off');
+  s = await waitFor((x) => x.litLeds.length === 0, 2000);
+  check('LED pattern "off" fades the ring out', !!s);
 } catch (error) {
   check('run completed', false, error.message);
 }

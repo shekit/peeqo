@@ -297,3 +297,7 @@ footer {
   opacity: 0.4;
   pointer-events: none;
 }
+
+.led-row {
+  margin: 8px 0 4px;
+}

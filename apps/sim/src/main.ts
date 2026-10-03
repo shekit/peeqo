@@ -7,6 +7,9 @@ import {
   HEAD_ANIMATIONS,
   HEAD_ANIMATION_NAMES,
   HeadAnimator,
+  LED_COLORS,
+  LED_PATTERN_NAMES,
+  LedAnimator,
   MotionGovernor,
   DEV_KIT_GEOMETRY,
   PoseTrackPlayer,
@@ -15,6 +18,9 @@ import {
   checkPose,
   clampToSafe,
   isHeadAnimationName,
+  isLedColorName,
+  isLedPatternName,
+  describeLedPattern,
   solveIk,
   type ClassicLedAnimation,
   type ClassicLedColor,
@@ -106,6 +112,8 @@ async function main(): Promise<void> {
   const strip = new DotstarStrip(12);
   const timers = new VirtualScheduler(performance.now());
   const leds = new ClassicLeds(strip, timers);
+  // The new LED patterns and the 2019 animations share the strip; whichever was started last drives it.
+  const ledAnimator = new LedAnimator(strip, { seed: (Math.random() * 2 ** 32) >>> 0 });
   const sounds = { alert: new Audio(SOUND_URLS.alert) };
 
   let player: PoseTrackPlayer | null = null;
@@ -135,7 +143,16 @@ async function main(): Promise<void> {
     toAnimator();
     animator.play(name);
   };
-  const playLeds = (animation: ClassicLedAnimation, color: ClassicLedColor): void => leds.play(animation, color);
+  const playLeds = (animation: ClassicLedAnimation, color: ClassicLedColor): void => {
+    ledAnimator.stop();
+    leds.play(animation, color);
+  };
+  const playLedPattern = (name: string, color?: string): void => {
+    if (!isLedPatternName(name)) throw new Error(`Unknown LED pattern "${name}"`);
+    if (color !== undefined && !isLedColorName(color)) throw new Error(`Unknown LED colour "${color}"`);
+    timers.clearAll(); // stops any 2019 animation still running
+    ledAnimator.play(name, color === undefined ? {} : { color });
+  };
   const playSound = (name: keyof typeof sounds): void => {
     const audio = sounds[name];
     audio.currentTime = 0;
@@ -164,6 +181,8 @@ async function main(): Promise<void> {
       idle: animator.idle,
       emotions: EMOTIONS,
       faceStyle,
+      ledPatterns: LED_PATTERN_NAMES.map((name) => ({ name, description: describeLedPattern(name) })),
+      ledColors: Object.keys(LED_COLORS),
     },
     {
       onTarget: setTarget,
@@ -174,6 +193,7 @@ async function main(): Promise<void> {
       onAnimation: playAnimation,
       onReaction: react,
       onLeds: playLeds,
+      onLedPattern: playLedPattern,
       onGlasses: setGlasses,
       onBlink: () => face().blink(performance.now()),
       onFaceStyle: (style) => {
@@ -243,6 +263,8 @@ async function main(): Promise<void> {
       faceStyle = style;
     },
     playLeds,
+    playLedPattern,
+    ledPattern: () => (ledAnimator.active ? ledAnimator.pattern : null),
     react,
     setView: (name: ViewName) => stage.setView(name),
   };
@@ -279,6 +301,7 @@ async function main(): Promise<void> {
     robot.update(out.pose);
     robot.setRequested(showRequested && isClamped(out) ? out.requested : null);
     timers.advanceTo(now);
+    ledAnimator.update(now);
     if (strip.version !== ledVersion) {
       robot.setLeds(strip.shown);
       ledVersion = strip.version;
