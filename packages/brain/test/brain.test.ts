@@ -282,6 +282,19 @@ describe('Brain', () => {
     expect(brain.history.filter((m) => m.role === 'user').map((m) => m.content)).toEqual(['hello']);
   });
 
+  it('pays attention when someone starts talking, and relaxes if they say nothing', async () => {
+    const { body, states } = fakeBody();
+    const brain = new Brain({ model: new ScriptedModel({ delayMs: 50, random: () => 0 }), body });
+    brain.attend();
+    brain.dismiss();
+    expect(states).toEqual(['listening', 'idle']);
+    const turn = brain.hear('hello');
+    brain.attend(); // the mic opens again mid-turn: the turn keeps its own states
+    brain.dismiss();
+    await turn;
+    expect(states).toEqual(['listening', 'idle', 'thinking', 'speaking', 'idle']);
+  });
+
   it('remembers only the last few exchanges, cutting at a turn', async () => {
     const { body } = fakeBody();
     const brain = new Brain({ model: new ScriptedModel({ random: () => 0 }), body, memory: 2 });

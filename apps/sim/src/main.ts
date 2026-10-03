@@ -271,6 +271,7 @@ async function main(): Promise<void> {
     body,
     voice: true,
     onEvent: (event) => {
+      if (event.type === 'heard') talk.setStatus(`${brain.modelName}: thinking…`);
       if (event.type === 'reply') talk.setStatus(`${event.model}: answered in ${(event.ms / 1000).toFixed(1)} s`);
       if (event.type === 'error') talk.addLine('note', event.message);
       if (event.type === 'tool' && event.name === 'show_gif') talk.addLine('note', `GIF: ${event.result}`);
@@ -282,13 +283,22 @@ async function main(): Promise<void> {
     body.hush();
     return brain.hear(text);
   };
+  let heardSomething = false;
   const mic = createMic({
     onStart: () => {
       poke();
+      body.hush(); // opening the mic cuts Peeqo off, as talking over someone would
+      heardSomething = false;
       brain.attend();
     },
-    onText: (text) => void hear(text),
-    onState: (state) => talk.setMic(state),
+    onText: (text) => {
+      heardSomething = true;
+      void hear(text);
+    },
+    onState: (state) => {
+      talk.setMic(state);
+      if (state === 'idle' && !heardSomething) brain.dismiss();
+    },
     onError: (message) => talk.addLine('note', message),
   });
   const talk = createTalkPanel(panelHost, {

@@ -101,7 +101,12 @@ export class Brain {
 
   /** Someone has started talking to Peeqo (a wake word, the mic opening): it pays attention. */
   attend(): void {
-    this.#body.setState('listening');
+    if (!this.#turn) this.#body.setState('listening');
+  }
+
+  /** They stopped without saying anything: unless a turn is under way, Peeqo goes back to idle. */
+  dismiss(): void {
+    if (!this.#turn) this.#body.setState('idle');
   }
 
   /** Forgets the conversation. */
