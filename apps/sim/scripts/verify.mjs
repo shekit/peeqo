@@ -267,6 +267,38 @@ try {
   await hook('playLedPattern', 'off');
   s = await waitFor((x) => x.litLeds.length === 0, 2000);
   check('LED pattern "off" fades the ring out', !!s);
+
+  // Expressions: face, ring, head and voice move together, safely, then return to the state.
+  for (const [name, emotion, pattern] of [
+    ['happy', 'happy', 'glow'],
+    ['surprised', 'surprised', 'wake'],
+    ['celebrate', 'excited', 'rainbow'],
+  ]) {
+    await hook('express', name);
+    await page.waitForTimeout(150);
+    const x = await state();
+    const led = await hook('ledPattern');
+    check(`expression "${name}" moves the face, ring and head together`, x.emotion === emotion && led === pattern && x.gesture !== null, `face ${x.emotion}, ring ${led}, head ${x.gesture}`);
+    if (name === 'celebrate') {
+      await page.waitForTimeout(600);
+      await shot('11-celebrate');
+    }
+    let worst = 'ok';
+    const started = Date.now();
+    for (;;) {
+      const y = await state();
+      if (y.output.status !== 'ok' && worst === 'ok') worst = `${y.output.status}: ${y.output.notes.join('; ')}`;
+      if ((await hook('character')).expression === null || Date.now() - started > 6000) break;
+      await page.waitForTimeout(40);
+    }
+    const after = await state();
+    check(`expression "${name}" stays safe and returns to the state`, worst === 'ok' && after.emotion === 'neutral', `${worst}; face ${after.emotion}`);
+  }
+  await hook('setCharacterState', 'listening');
+  await page.waitForTimeout(200);
+  s = await state();
+  check('state "listening": attentive face and listening ring', s.emotion === 'listening' && (await hook('ledPattern')) === 'listen');
+  await hook('setCharacterState', 'idle');
 } catch (error) {
   check('run completed', false, error.message);
 }

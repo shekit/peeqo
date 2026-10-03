@@ -301,3 +301,11 @@ footer {
 .led-row {
   margin: 8px 0 4px;
 }
+
+.state-label {
+  margin: 10px 0 4px;
+}
+
+.mute {
+  margin-top: 8px;
+}

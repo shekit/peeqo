@@ -1,0 +1,14 @@
+{
+  "name": "@peeqo/character",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Peeqo as a character: expressions that move the head, eyes, LED ring and voice together, and the states (idle, listening, thinking, speaking, sleeping) they play over.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@peeqo/core": "*",
+    "@peeqo/face": "*"
+  }
+}

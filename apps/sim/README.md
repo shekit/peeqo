@@ -42,6 +42,22 @@ npm run check:clearance -w @peeqo/sim        # re-measures the real meshes at 50
    - **Independent checks:** `check:clearance` and `verify:sim` re-measure the real meshes at poses the core
      accepts, including poses on the edge of the safe range, and fail if any gap is smaller than promised.
 
+## Character
+
+`Character` (`packages/character`) is Peeqo as a character. Everything above (head, face, ring, voice) is
+driven through it.
+
+- **States:** idle, listening, thinking, speaking and sleeping. Each sets the resting face, gaze, LED ring and
+  how lively the head is, with a small greeting gesture on entry.
+- **Expressions:** 23 so far (happy, excited, laugh, love, sad, grumpy, surprised, scared, sleepy, curious,
+  confused, thinking, yes, no, hello, bye, shy, wink, celebrate, alert, oops, sigh, wonder). Each is a few
+  timed steps that move the head, eyes, ring and voice together. When it ends, whatever it changed returns to
+  the current state.
+- **Voice:** short chirps, coos and bloops are synthesized in plain TypeScript (`sounds.ts`). The sim plays them
+  through Web Audio; the robot can play the same samples.
+- **Safety:** tests play every expression from several states through the real governor, and check it never
+  has to hold the head back.
+
 ## Head motion
 
 The animator in `packages/core` (`HeadAnimator`) turns gestures into smooth targets for the governor, 100 times

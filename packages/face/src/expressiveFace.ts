@@ -27,6 +27,7 @@ export const EMOTIONS = [
   'shy',
   'wink',
   'skeptical',
+  'asleep',
 ] as const;
 export type Emotion = (typeof EMOTIONS)[number];
 
@@ -111,6 +112,7 @@ const LOOKS: Record<Emotion, Look> = {
     wander: 0.3,
     blinks: 0.7,
   },
+  asleep: { ...both({ open: 0, dy: 0.08 }), gaze: [0, 0.2], wander: 0, blinks: 0 },
 };
 
 /** Where gaze offsets reach, in pixels: inside the glasses' lenses. */

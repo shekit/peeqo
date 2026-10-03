@@ -26,6 +26,9 @@ export interface PanelCallbacks {
   onReaction(name: string): void;
   onLeds(animation: ClassicLedAnimation, color: ClassicLedColor): void;
   onLedPattern(name: string, color: string | undefined): void;
+  onExpression(name: string): void;
+  onState(state: string): void;
+  onMute(muted: boolean): void;
   onGlasses(name: string | null): void;
   onBlink(): void;
   onFaceStyle(style: 'expressive' | 'classic'): void;
@@ -50,11 +53,13 @@ export interface PanelOptions {
   readonly faceStyle: 'expressive' | 'classic';
   readonly ledPatterns: readonly { readonly name: string; readonly description: string }[];
   readonly ledColors: readonly string[];
+  readonly expressions: readonly { readonly name: string; readonly description: string }[];
+  readonly states: readonly string[];
 }
 
 export interface Panel {
   /** Refreshes readouts; call once per frame. */
-  update(output: GovernorOutput, playing: string | null, clearance: ClearanceReading | null, gesture: string | null): void;
+  update(output: GovernorOutput, playing: string | null, clearance: ClearanceReading | null, gesture: string | null, expression: string | null, state: string): void;
   /** Moves the sliders to show a target (without triggering onTarget). */
   showTarget(pose: Pose): void;
 }
@@ -86,6 +91,37 @@ export function createPanel(host: HTMLElement, options: PanelOptions, callbacks:
   // ---- header with the safety status ----
   const status = el('span', { class: 'status ok', text: 'SAFE' });
   host.append(el('header', {}, el('h1', { text: 'Peeqo sim' }), status));
+
+  // ---- character: expressions over a state ----
+  const expressionButtons = el(
+    'div',
+    { class: 'buttons' },
+    ...options.expressions.map(({ name, description }) => {
+      const b = el('button', { type: 'button', text: name, title: description, 'data-name': name });
+      b.addEventListener('click', () => callbacks.onExpression(name));
+      return b;
+    }),
+  );
+  const stateButtons = el(
+    'div',
+    { class: 'buttons states' },
+    ...options.states.map((name) => {
+      const b = el('button', { type: 'button', text: name, 'data-name': name });
+      b.addEventListener('click', () => callbacks.onState(name));
+      return b;
+    }),
+  );
+  const mute = el('input', { type: 'checkbox' });
+  mute.addEventListener('change', () => callbacks.onMute(mute.checked));
+  host.append(
+    section(
+      'Expressions',
+      expressionButtons,
+      el('p', { class: 'muted small state-label', text: 'State:' }),
+      stateButtons,
+      el('label', { class: 'check mute' }, mute, ' Mute sounds'),
+    ),
+  );
 
   // ---- head pose ----
   const axes = [
@@ -291,7 +327,9 @@ export function createPanel(host: HTMLElement, options: PanelOptions, callbacks:
   };
 
   let lastNotes = '';
-  const update = (output: GovernorOutput, playing: string | null, clearance: ClearanceReading | null, gesture: string | null): void => {
+  const update = (output: GovernorOutput, playing: string | null, clearance: ClearanceReading | null, gesture: string | null, expression: string | null, state: string): void => {
+    for (const b of expressionButtons.querySelectorAll('button')) b.classList.toggle('active', b.dataset.name === expression);
+    for (const b of stateButtons.querySelectorAll('button')) b.classList.toggle('active', b.dataset.name === state);
     clearanceText.textContent = clearance
       ? `Closest parts: ${Number.isFinite(clearance.minMm) ? clearance.minMm.toFixed(2) : '—'} mm (${clearance.between})`
       : 'Collision check: off';

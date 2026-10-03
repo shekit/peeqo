@@ -27,7 +27,9 @@ import {
   type GovernorOutput,
   type Pose,
 } from '@peeqo/core';
+import { CHARACTER_STATES, Character, EXPRESSION_NAMES, expressionSpec, isCharacterState, isExpressionName } from '@peeqo/character';
 import { CLASSIC_GLASSES_CYCLE, ClassicFace, EMOTIONS, ExpressiveFace, FACE_HEIGHT, FACE_WIDTH, isEmotion } from '@peeqo/face';
+import { WebSoundPlayer } from './audio/webSound.ts';
 import { GLASSES_URLS, LEGACY_REACTIONS, LEGACY_TRACKS, SOUND_URLS } from './content.ts';
 import { createCollisionProbe } from './scene/collisionProbe.ts';
 import { createRobot } from './scene/robot.ts';
@@ -114,6 +116,9 @@ async function main(): Promise<void> {
   const leds = new ClassicLeds(strip, timers);
   // The new LED patterns and the 2019 animations share the strip; whichever was started last drives it.
   const ledAnimator = new LedAnimator(strip, { seed: (Math.random() * 2 ** 32) >>> 0 });
+  // Peeqo as a character: states and expressions that move the head, eyes, ring and voice together.
+  const voice = new WebSoundPlayer();
+  const character = new Character({ head: animator, face: expressive, leds: ledAnimator, sound: voice });
   const sounds = { alert: new Audio(SOUND_URLS.alert) };
 
   let player: PoseTrackPlayer | null = null;
@@ -136,6 +141,19 @@ async function main(): Promise<void> {
     // The 2019 animations are motions around level; play them around the neutral pose.
     player = new PoseTrackPlayer({ ...track, poses: aroundNeutral(track.poses, neutral) }, performance.now());
     mode = 'legacy';
+  };
+  const express = (name: string): void => {
+    if (!isExpressionName(name)) throw new Error(`Unknown expression "${name}"`);
+    player = null;
+    toAnimator();
+    faceStyle = 'expressive';
+    character.express(name);
+  };
+  const setCharacterState = (state: string): void => {
+    if (!isCharacterState(state)) throw new Error(`Unknown state "${state}"`);
+    player = null;
+    toAnimator();
+    character.setState(state);
   };
   const playHead = (name: string): void => {
     if (!isHeadAnimationName(name)) throw new Error(`Unknown head animation "${name}"`);
@@ -182,6 +200,8 @@ async function main(): Promise<void> {
       emotions: EMOTIONS,
       faceStyle,
       ledPatterns: LED_PATTERN_NAMES.map((name) => ({ name, description: describeLedPattern(name) })),
+      expressions: EXPRESSION_NAMES.map((name) => ({ name, description: expressionSpec(name).description })),
+      states: CHARACTER_STATES,
       ledColors: Object.keys(LED_COLORS),
     },
     {
@@ -194,6 +214,11 @@ async function main(): Promise<void> {
       onReaction: react,
       onLeds: playLeds,
       onLedPattern: playLedPattern,
+      onExpression: express,
+      onState: setCharacterState,
+      onMute: (muted) => {
+        voice.muted = muted;
+      },
       onGlasses: setGlasses,
       onBlink: () => face().blink(performance.now()),
       onFaceStyle: (style) => {
@@ -265,6 +290,9 @@ async function main(): Promise<void> {
     playLeds,
     playLedPattern,
     ledPattern: () => (ledAnimator.active ? ledAnimator.pattern : null),
+    express,
+    setCharacterState,
+    character: () => ({ state: character.state, expression: character.expression }),
     react,
     setView: (name: ViewName) => stage.setView(name),
   };
@@ -301,6 +329,7 @@ async function main(): Promise<void> {
     robot.update(out.pose);
     robot.setRequested(showRequested && isClamped(out) ? out.requested : null);
     timers.advanceTo(now);
+    character.update(now);
     ledAnimator.update(now);
     if (strip.version !== ledVersion) {
       robot.setLeds(strip.shown);
@@ -310,7 +339,7 @@ async function main(): Promise<void> {
       face().draw(faceContext);
       robot.faceTexture.needsUpdate = true;
     }
-    panel.update(out, player?.track.name ?? null, checkPose(out.pose, DEV_KIT_GEOMETRY, DEFAULT_SAFETY_LIMITS, DEV_KIT_CLEARANCE).clearance, animator.playing);
+    panel.update(out, player?.track.name ?? null, checkPose(out.pose, DEV_KIT_GEOMETRY, DEFAULT_SAFETY_LIMITS, DEV_KIT_CLEARANCE).clearance, animator.playing, character.expression, character.state);
     stage.render();
 
     if (first) {
