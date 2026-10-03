@@ -88,7 +88,8 @@ async function setTargetAndSettle(target, timeoutMs = 6000) {
 const shot = (name) => page.screenshot({ path: path.join(outDir, `${name}.png`) });
 
 try {
-  await page.goto(url);
+  // Idle off to start: the first checks expect the head exactly at neutral. It is switched on near the end.
+  await page.goto(`${url}?idle=0`);
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 60000 });
   const neutral = await hook('neutral');
   const near = (a, b, tol = 1e-3) => ['pitchDeg', 'rollDeg', 'heaveMm'].every((k) => Math.abs(a[k] - b[k]) < tol);
@@ -195,6 +196,55 @@ try {
     s ? `roll ${s.output.pose.rollDeg.toFixed(3)}° (edge ${rollEdge.toFixed(3)}°)` : 'timed out',
   );
   await shot('08-limited-roll');
+
+  // New head gestures: each plays through with the governor never holding it back.
+  await hook('goNeutral');
+  s = await waitFor((x) => x.mode === 'animator' && near(x.output.pose, neutral), 5000);
+  check('"Neutral" hands the head back to the animator', !!s);
+  const gestures = await hook('headAnimations');
+  const gestureProblems = [];
+  for (const { name, durationS } of gestures) {
+    await hook('playHead', name);
+    const started = Date.now();
+    let worst = 'ok';
+    let moved = 0;
+    let shotTaken = false;
+    for (;;) {
+      const x = await state();
+      if (x.output.status !== 'ok' && worst === 'ok') worst = `${x.output.status}: ${x.output.notes.join('; ')}`;
+      const p = x.output.pose;
+      moved = Math.max(moved, Math.hypot(p.pitchDeg - neutral.pitchDeg, p.rollDeg - neutral.rollDeg) + Math.abs(p.heaveMm - neutral.heaveMm));
+      if (name === 'tilt' && !shotTaken && Date.now() - started > 700) {
+        await hook('setView', 'face');
+        await shot('09-gesture-tilt');
+        await hook('setView', 'three-quarter');
+        shotTaken = true;
+      }
+      if (x.gesture === null && Date.now() - started > 300) break;
+      if (Date.now() - started > (durationS * 2 + 3) * 1000) {
+        worst = 'never finished';
+        break;
+      }
+      await page.waitForTimeout(25);
+    }
+    if (worst !== 'ok' || moved < 0.8) gestureProblems.push(`${name}: ${worst}, moved ${moved.toFixed(2)}`);
+  }
+  check(`all ${gestures.length} head gestures play without the governor holding them back`, gestureProblems.length === 0, gestureProblems.join(' | '));
+
+  // The idle layer: small, smooth, safe motion.
+  await hook('setIdle', true);
+  let idleWorst = 'ok';
+  let idleTilt = 0;
+  let idleHeave = 0;
+  for (let n = 0; n < 120; n++) {
+    const x = await state();
+    if (x.output.status !== 'ok' && idleWorst === 'ok') idleWorst = `${x.output.status}: ${x.output.notes.join('; ')}`;
+    const p = x.output.pose;
+    idleTilt = Math.max(idleTilt, Math.hypot(p.pitchDeg - neutral.pitchDeg, p.rollDeg - neutral.rollDeg));
+    idleHeave = Math.max(idleHeave, Math.abs(p.heaveMm - neutral.heaveMm));
+    await page.waitForTimeout(40);
+  }
+  check('idle: the head stays alive (breathing, drifting), small and safe', idleWorst === 'ok' && idleTilt + idleHeave > 0.05 && idleTilt < 3 && idleHeave < 1, `${idleWorst}; up to ${idleTilt.toFixed(2)}° and ${idleHeave.toFixed(2)} mm`);
 } catch (error) {
   check('run completed', false, error.message);
 }

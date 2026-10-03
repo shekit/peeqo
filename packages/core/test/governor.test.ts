@@ -147,6 +147,22 @@ describe('MotionGovernor (dev kit, with CAD collision tables)', () => {
     expect(check.violations.some((v) => v.kind === 'collision' && /horn \d and the base/.test(v.between ?? ''))).toBe(true);
   });
 
+  it('still reaches a goal when one axis is off by only rounding error', () => {
+    // A 1e-17 leftover on one axis once froze the whole straight-line move (its braking speed rounded to 0).
+    for (const tiny of [1e-17, -3e-16, 1e-300]) {
+      const g = governor();
+      const target: Pose = { pitchDeg: neutral.pitchDeg + 0.002, rollDeg: neutral.rollDeg + tiny, heaveMm: neutral.heaveMm + 0.0058 };
+      g.setTarget(target);
+      const out = run(g, 0.5);
+      expect(out.pose.pitchDeg).toBeCloseTo(target.pitchDeg, 12);
+      expect(out.pose.heaveMm).toBeCloseTo(target.heaveMm, 12);
+      g.setTarget(neutral);
+      const back = run(g, 0.5);
+      expect(back.pose.pitchDeg).toBeCloseTo(neutral.pitchDeg, 12);
+      expect(back.pose.heaveMm).toBeCloseTo(neutral.heaveMm, 12);
+    }
+  });
+
   it('ignores non-numeric targets and holds position', () => {
     const g = governor();
     g.setTarget({ ...neutral, pitchDeg: neutral.pitchDeg + 1 });

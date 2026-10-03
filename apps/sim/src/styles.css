@@ -279,3 +279,12 @@ footer {
   font-size: 12px;
   color: var(--text);
 }
+
+.idle-row {
+  margin-top: 10px;
+  gap: 16px;
+}
+
+.idle-row input[type='range'] {
+  width: 110px;
+}

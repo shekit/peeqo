@@ -5,3 +5,8 @@ node_modules/
 dist/
 coverage/
 *.log
+
+# local secrets (API keys)
+.env
+.env.*
+!.env.example

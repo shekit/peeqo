@@ -204,8 +204,10 @@ export class MotionGovernor {
       for (const j of [0, 1, 2] as const) {
         const remaining = Math.abs(error[j]);
         if (remaining === 0) continue;
-        const a = maxAccel[j];
-        const brakingSpeed = a * dt * (Math.sqrt(0.25 + (2 * remaining) / (a * dt * dt)) - 0.5);
+        // Fastest speed from which this axis can still stop within `remaining`: a·dt·(√(¼ + x) − ½), written as
+        // below so it stays exact for tiny distances (the difference form cancels to 0 and would freeze every axis).
+        const x = (2 * remaining) / (maxAccel[j] * dt * dt);
+        const brakingSpeed = (2 * remaining) / dt / (Math.sqrt(0.25 + x) + 0.5);
         speed = Math.min(speed, (Math.min(maxSpeed[j], brakingSpeed, remaining / dt) * distance) / remaining);
       }
     }

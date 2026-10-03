@@ -4,6 +4,9 @@ import {
   DEFAULT_SAFETY_LIMITS,
   DEV_KIT_CLEARANCE,
   DotstarStrip,
+  HEAD_ANIMATIONS,
+  HEAD_ANIMATION_NAMES,
+  HeadAnimator,
   MotionGovernor,
   DEV_KIT_GEOMETRY,
   PoseTrackPlayer,
@@ -11,6 +14,7 @@ import {
   aroundNeutral,
   checkPose,
   clampToSafe,
+  isHeadAnimationName,
   solveIk,
   type ClassicLedAnimation,
   type ClassicLedColor,
@@ -75,6 +79,15 @@ async function main(): Promise<void> {
   // commanded pose against the CAD collision tables.
   const governor = new MotionGovernor(DEV_KIT_GEOMETRY, DEFAULT_SAFETY_LIMITS, null, DEV_KIT_CLEARANCE);
   const neutral = governor.neutral;
+  // Head motion comes from one of three places: the animator (gestures over the idle layer; the default), the
+  // sliders (manual), or a 2019 animation track (legacy). The animator takes over again from wherever the head is.
+  const params = new URLSearchParams(window.location.search);
+  const animator = new HeadAnimator(neutral, { seed: (Math.random() * 2 ** 32) >>> 0, idle: params.get('idle') !== '0' });
+  let mode: 'animator' | 'manual' | 'legacy' = 'animator';
+  const toAnimator = (): void => {
+    if (mode !== 'animator') animator.resetFrom(governor.output.pose);
+    mode = 'animator';
+  };
   const probe = createCollisionProbe(robot.bodies);
   const strip = new DotstarStrip(12);
   const timers = new VirtualScheduler(performance.now());
@@ -86,14 +99,27 @@ async function main(): Promise<void> {
 
   const setTarget = (pose: Pose): void => {
     player = null;
+    mode = 'manual';
     governor.setTarget(pose);
     panel.showTarget(pose);
+  };
+  const goNeutral = (): void => {
+    player = null;
+    toAnimator();
+    animator.stop();
   };
   const playAnimation = (name: string): void => {
     const track = LEGACY_TRACKS.get(name);
     if (!track) throw new Error(`Unknown animation "${name}"`);
     // The 2019 animations are motions around level; play them around the neutral pose.
     player = new PoseTrackPlayer({ ...track, poses: aroundNeutral(track.poses, neutral) }, performance.now());
+    mode = 'legacy';
+  };
+  const playHead = (name: string): void => {
+    if (!isHeadAnimationName(name)) throw new Error(`Unknown head animation "${name}"`);
+    player = null;
+    toAnimator();
+    animator.play(name);
   };
   const playLeds = (animation: ClassicLedAnimation, color: ClassicLedColor): void => leds.play(animation, color);
   const playSound = (name: keyof typeof sounds): void => {
@@ -120,9 +146,15 @@ async function main(): Promise<void> {
       glasses: [...glasses.keys()],
       initialGlasses,
       neutral,
+      headAnimations: HEAD_ANIMATION_NAMES.map((name) => ({ name, description: HEAD_ANIMATIONS.get(name)!.description })),
+      idle: animator.idle,
     },
     {
       onTarget: setTarget,
+      onNeutral: goNeutral,
+      onHeadAnimation: playHead,
+      onIdle: (on) => animator.setIdle(on),
+      onEnergy: (energy) => animator.setEnergy(energy),
       onAnimation: playAnimation,
       onReaction: react,
       onLeds: playLeds,
@@ -139,6 +171,9 @@ async function main(): Promise<void> {
     state: () => ({
       output: governor.output,
       playing: player?.track.name ?? null,
+      mode,
+      gesture: animator.playing,
+      idle: animator.idle,
       litLeds: strip.shown.flatMap((p, i) => (p.brightness > 0 && (p.r || p.g || p.b) ? [i] : [])),
       eyes: face.eyeRadii,
     }),
@@ -172,7 +207,12 @@ async function main(): Promise<void> {
     /** Measured mesh-to-mesh gaps at the drawn pose (independent of the tables; slow). */
     probeCollisions: () => probe.measure(),
     setTarget,
+    goNeutral,
     playAnimation,
+    playHead,
+    headAnimations: () => HEAD_ANIMATION_NAMES.map((name) => ({ name, durationS: HEAD_ANIMATIONS.get(name)!.duration })),
+    setIdle: (on: boolean) => animator.setIdle(on),
+    setEnergy: (energy: number) => animator.setEnergy(energy),
     playLeds,
     react,
     setView: (name: ViewName) => stage.setView(name),
@@ -186,24 +226,25 @@ async function main(): Promise<void> {
     accumulator += Math.min(0.1, Math.max(0, (now - last) / 1000));
     last = now;
 
-    if (player) {
+    if (mode === 'legacy' && player) {
       const target = player.poseAt(now);
       if (target) {
         governor.setTarget(target);
         panel.showTarget(target);
       } else {
         player = null;
-        governor.setTarget(neutral);
-        panel.showTarget(neutral);
+        toAnimator();
       }
     }
     let steps = 0;
     while (accumulator >= STEP_S && steps < MAX_STEPS_PER_FRAME) {
+      if (mode === 'animator') governor.setTarget(animator.update(STEP_S));
       governor.step(STEP_S);
       accumulator -= STEP_S;
       steps++;
     }
     if (steps === MAX_STEPS_PER_FRAME) accumulator = 0; // fell behind; do not try to catch up in a burst
+    if (mode === 'animator') panel.showTarget(animator.pose);
 
     const out = governor.output;
     robot.update(out.pose);
@@ -217,7 +258,7 @@ async function main(): Promise<void> {
       face.draw(faceContext);
       robot.faceTexture.needsUpdate = true;
     }
-    panel.update(out, player?.track.name ?? null, checkPose(out.pose, DEV_KIT_GEOMETRY, DEFAULT_SAFETY_LIMITS, DEV_KIT_CLEARANCE).clearance);
+    panel.update(out, player?.track.name ?? null, checkPose(out.pose, DEV_KIT_GEOMETRY, DEFAULT_SAFETY_LIMITS, DEV_KIT_CLEARANCE).clearance, animator.playing);
     stage.render();
 
     if (first) {

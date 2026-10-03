@@ -17,6 +17,11 @@ import { EnvelopePlot } from './envelopePlot.ts';
 
 export interface PanelCallbacks {
   onTarget(pose: Pose): void;
+  /** Back to the neutral pose, idling (or still, with idle off). */
+  onNeutral(): void;
+  onHeadAnimation(name: string): void;
+  onIdle(on: boolean): void;
+  onEnergy(energy: number): void;
   onAnimation(name: string): void;
   onReaction(name: string): void;
   onLeds(animation: ClassicLedAnimation, color: ClassicLedColor): void;
@@ -35,11 +40,14 @@ export interface PanelOptions {
   readonly initialGlasses: string | null;
   /** The governor's neutral pose: where "Neutral" goes and the sliders start. */
   readonly neutral: Pose;
+  readonly headAnimations: readonly { readonly name: string; readonly description: string }[];
+  /** Whether the idle layer starts on. */
+  readonly idle: boolean;
 }
 
 export interface Panel {
   /** Refreshes readouts; call once per frame. */
-  update(output: GovernorOutput, playing: string | null, clearance: ClearanceReading | null): void;
+  update(output: GovernorOutput, playing: string | null, clearance: ClearanceReading | null, gesture: string | null): void;
   /** Moves the sliders to show a target (without triggering onTarget). */
   showTarget(pose: Pose): void;
 }
@@ -99,8 +107,35 @@ export function createPanel(host: HTMLElement, options: PanelOptions, callbacks:
     );
   });
   const home = el('button', { type: 'button', text: 'Neutral' });
-  home.addEventListener('click', () => callbacks.onTarget({ ...options.neutral }));
+  home.addEventListener('click', () => callbacks.onNeutral());
   host.append(section('Head pose (target → actual)', ...rows, el('div', { class: 'row' }, home)));
+
+  // ---- head motion: gestures over the idle layer ----
+  const gestureButtons = el(
+    'div',
+    { class: 'buttons' },
+    ...options.headAnimations.map(({ name, description }) => {
+      const b = el('button', { type: 'button', text: name, title: description, 'data-name': name });
+      b.addEventListener('click', () => callbacks.onHeadAnimation(name));
+      return b;
+    }),
+  );
+  const idleToggle = el('input', { type: 'checkbox', checked: options.idle });
+  idleToggle.addEventListener('change', () => callbacks.onIdle(idleToggle.checked));
+  const energy = el('input', { type: 'range', min: 0, max: 1, step: 0.05, value: 1, 'aria-label': 'Energy' });
+  energy.addEventListener('input', () => callbacks.onEnergy(Number(energy.value)));
+  host.append(
+    section(
+      'Head motion',
+      gestureButtons,
+      el(
+        'div',
+        { class: 'row idle-row' },
+        el('label', { class: 'check' }, idleToggle, ' Alive (breathing, glances)'),
+        el('label', { class: 'check' }, 'Energy ', energy),
+      ),
+    ),
+  );
 
   // ---- safe range ----
   const plotCanvas = el('canvas', { class: 'envelope', width: 480, height: 480 });
@@ -210,7 +245,7 @@ export function createPanel(host: HTMLElement, options: PanelOptions, callbacks:
   };
 
   let lastNotes = '';
-  const update = (output: GovernorOutput, playing: string | null, clearance: ClearanceReading | null): void => {
+  const update = (output: GovernorOutput, playing: string | null, clearance: ClearanceReading | null, gesture: string | null): void => {
     clearanceText.textContent = clearance
       ? `Closest parts: ${Number.isFinite(clearance.minMm) ? clearance.minMm.toFixed(2) : '—'} mm (${clearance.between})`
       : 'Collision check: off';
@@ -234,6 +269,7 @@ export function createPanel(host: HTMLElement, options: PanelOptions, callbacks:
       lastNotes = text;
     }
     for (const b of animationButtons.querySelectorAll('button')) b.classList.toggle('active', b.dataset.name === playing);
+    for (const b of gestureButtons.querySelectorAll('button')) b.classList.toggle('active', b.dataset.name === gesture);
     plot.draw(output);
   };
 

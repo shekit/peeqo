@@ -42,6 +42,23 @@ npm run check:clearance -w @peeqo/sim        # re-measures the real meshes at 50
    - **Independent checks:** `check:clearance` and `verify:sim` re-measure the real meshes at poses the core
      accepts, including poses on the edge of the safe range, and fail if any gap is smaller than promised.
 
+## Head motion
+
+The animator in `packages/core` (`HeadAnimator`) turns gestures into smooth targets for the governor, 100 times
+a second. The same code will drive the robot.
+
+- **Gestures:** 16 so far (`headAnimations.ts`): nod, shake, tilt, look-up, look-down, droop, perk-up, bounce,
+  wiggle, think, listen, doze, sigh, startle, groove and hello. Each is a set of keyframes joined by curves
+  that ease through every turn and never overshoot a key. Small opposite moves before big ones give
+  anticipation.
+- **Follow-through:** everything passes through a slightly underdamped spring, so moves settle with a little
+  weight. Each play varies by a few percent, so no gesture repeats exactly.
+- **Alive layer:** breathing, a slow wander, and now and then a glance or a curious tilt. An energy level
+  (0–1) sets its size and pace, it shrinks under gestures, and it can be switched off.
+- **Safety:** gestures use height to gain tilt, because the neck's room is a double cone. Every gesture keeps
+  at least 30% of the room to spare. Tests play them all, with variation and the alive layer, and check that
+  every frame is safe and the governor never has to hold anything back.
+
 ## Neck (dev kit, from the CAD)
 
 - **Servos:** shafts 27.32 mm from the centre, 42 mm up. Each servo has a U-horn with its hubs.
