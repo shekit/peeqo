@@ -225,7 +225,7 @@ export function createPanel(host: HTMLElement, options: PanelOptions, callbacks:
     section(
       '2019 reactions',
       buttonRow(options.reactions, callbacks.onReaction),
-      el('p', { class: 'muted small', text: 'Motion, lights and sound from responses.js. Their GIFs/videos are not played yet.' }),
+      el('p', { class: 'muted small', text: 'Motion, lights, sound and local media from responses.js.' }),
     ),
   );
 

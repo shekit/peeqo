@@ -11,6 +11,19 @@ const glassesFiles = import.meta.glob<string>('../../../electron/app/media/imgs/
   query: '?url',
   import: 'default',
 });
+const responseMediaFiles = import.meta.glob<string>('../../../electron/app/media/responses/*/*.{mp4,gif,png,jpg,webp}', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+});
+
+/** Local media for each 2019 response folder (responses/<folder>/…), as URLs. */
+function responseMedia(folder: string): readonly string[] {
+  return Object.entries(responseMediaFiles)
+    .filter(([file]) => file.split('/').at(-2) === folder)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, url]) => url);
+}
 
 const baseName = (file: string): string => file.slice(file.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '');
 const byName = <T>(entries: [string, T][]): [string, T][] => entries.sort(([a], [b]) => a.localeCompare(b));
@@ -38,17 +51,19 @@ export interface LegacyReaction {
   readonly servo: string | null;
   readonly led: { readonly animation: ClassicLedAnimation; readonly color: ClassicLedColor };
   readonly sound: keyof typeof SOUND_URLS | null;
+  /** The reaction's local GIFs, videos and pictures (one is shown at random). */
+  readonly media: readonly string[];
 }
 
 /**
- * The 2019 reactions from electron/app/js/responses/responses.js: head motion, LEDs and sound.
- * Their GIF/video media is not played yet.
+ * The 2019 reactions from electron/app/js/responses/responses.js: head motion, LEDs, sound and their local media
+ * (the online searches they also made are left out).
  */
 export const LEGACY_REACTIONS: readonly LegacyReaction[] = [
-  { name: 'wakeword', servo: 'alert', led: { animation: 'circle', color: 'aqua' }, sound: 'alert' },
-  { name: 'greeting', servo: 'look-up', led: { animation: 'blink', color: 'green' }, sound: null },
-  { name: 'ok', servo: 'look-up', led: { animation: 'blink', color: 'green' }, sound: null },
-  { name: 'bye', servo: 'look-up-slow', led: { animation: 'blink', color: 'blue' }, sound: null },
-  { name: 'confused', servo: null, led: { animation: 'blink', color: 'orange' }, sound: null },
-  { name: 'alarm', servo: 'jiggle', led: { animation: 'blink', color: 'yellow' }, sound: null },
+  { name: 'wakeword', servo: 'alert', led: { animation: 'circle', color: 'aqua' }, sound: 'alert', media: [] },
+  { name: 'greeting', servo: 'look-up', led: { animation: 'blink', color: 'green' }, sound: null, media: responseMedia('greeting') },
+  { name: 'ok', servo: 'look-up', led: { animation: 'blink', color: 'green' }, sound: null, media: responseMedia('ok') },
+  { name: 'bye', servo: 'look-up-slow', led: { animation: 'blink', color: 'blue' }, sound: null, media: responseMedia('bye') },
+  { name: 'confused', servo: null, led: { animation: 'blink', color: 'orange' }, sound: null, media: responseMedia('confused') },
+  { name: 'alarm', servo: 'jiggle', led: { animation: 'blink', color: 'yellow' }, sound: null, media: responseMedia('alarm') },
 ];

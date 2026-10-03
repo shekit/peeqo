@@ -193,6 +193,12 @@ async function main(): Promise<void> {
     if (reaction.sound) playSound(reaction.sound);
     playLeds(reaction.led.animation, reaction.led.color);
     if (reaction.servo) playAnimation(reaction.servo);
+    const media = reaction.media[Math.floor(Math.random() * reaction.media.length)];
+    if (media) {
+      faceStyle = 'expressive'; // the 2019 face could not show media; the expressive one can
+      const isVideo = media.endsWith('.mp4');
+      void body.showGif({ id: media, title: reaction.name, mp4: isVideo ? media : null, gif: isVideo ? null : media, width: 1, height: 1 });
+    }
   };
 
   const panel = createPanel(

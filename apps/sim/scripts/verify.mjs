@@ -332,6 +332,12 @@ try {
   check('brain: finds a GIF and shows it on the face', !!s && turn.gif === 'stub-shrug' && turn.expressions.includes('excited'), JSON.stringify(turn));
   s = await waitFor((x) => (x.output.status === 'ok') && x.emotion === 'neutral', 6000);
   check('brain: returns to idle after the turn', !!s && (await hook('character')).state === 'idle');
+
+  // A 2019 reaction with local media plays it on the face, as the 2019 robot did.
+  await waitFor((x) => !x.showingMedia, 6000);
+  await hook('react', 'ok');
+  s = await waitFor((x) => x.showingMedia, 5000);
+  check('2019 reaction "ok" plays its video on the face', !!s);
 } catch (error) {
   check('run completed', false, error.message);
 }
