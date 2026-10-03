@@ -129,6 +129,17 @@ export interface ScreenMedia {
 
 const MEDIA_FADE_IN_MS = 220;
 const MEDIA_FADE_OUT_MS = 280;
+const CAPTION_FADE_IN_MS = 150;
+const CAPTION_FADE_OUT_MS = 280;
+/** Caption sizes to try, largest first, with the lines each may take. */
+const CAPTION_SIZES = [
+  [54, 2],
+  [46, 2],
+  [38, 3],
+  [32, 3],
+] as const;
+const CAPTION_MARGIN = 40;
+const CAPTION_FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
 export interface ExpressiveFaceOptions {
   /** Seed for blinks and glances, so a run can be replayed exactly. */
@@ -168,6 +179,8 @@ export class ExpressiveFace {
   #lastMs: number | null = null;
   #glasses: CanvasImageSource | null = null;
   #media: { readonly media: ScreenMedia; readonly startMs: number; readonly endMs: number } | null = null;
+  /** Words on the screen: over a GIF (along its bottom, meme style) or over the face (above the eyes). */
+  #caption: { readonly text: string; readonly overMedia: boolean; readonly startMs: number; readonly endMs: number } | null = null;
 
   constructor(options: ExpressiveFaceOptions = {}) {
     this.#random = seededRandom(options.seed ?? 1);
@@ -202,14 +215,52 @@ export class ExpressiveFace {
     this.#media = { media, startMs: nowMs, endMs: nowMs + durationMs };
   }
 
-  /** Ends any media now (it fades out). */
-  hideMedia(nowMs: number): void {
+  /** Ends the media now (it fades out); with `source`, only if that is what is showing. */
+  hideMedia(nowMs: number, source?: CanvasImageSource): void {
+    if (source !== undefined && this.#media?.media.source !== source) return;
     if (this.#media && this.#media.endMs > nowMs) this.#media = { ...this.#media, endMs: nowMs };
   }
 
   /** Whether media is on the screen (including its fades) at the last update. */
   get showingMedia(): boolean {
     return this.#mediaAlpha(this.#lastMs ?? 0) > 0;
+  }
+
+  /** When the media will have faded away (ms): any media, or with `source`, only that one; 0 if there is none. */
+  mediaEndMs(source?: CanvasImageSource): number {
+    const m = this.#media;
+    return m && (source === undefined || m.media.source === source) ? m.endMs + MEDIA_FADE_OUT_MS : 0;
+  }
+
+  /**
+   * Shows words on the screen for a while: along the bottom of the media showing, which then stays until they have
+   * been read, or else above the eyes. Returns when they will have faded away (ms).
+   */
+  showCaption(text: string, nowMs: number, durationMs: number): number {
+    const words = text.replace(/\s+/g, ' ').trim().slice(0, 160);
+    if (!words || !(durationMs > 0)) throw new Error('A caption needs words and a duration');
+    const media = this.#media;
+    const overMedia = media !== null && media.endMs > nowMs;
+    let endMs = nowMs + durationMs;
+    if (overMedia) {
+      // They go together: the media stays while the words are read, the words while the media plays.
+      endMs = Math.max(endMs, media.endMs);
+      this.#media = { ...media, endMs };
+    }
+    this.#caption = { text: words, overMedia, startMs: nowMs, endMs };
+    return endMs + CAPTION_FADE_OUT_MS;
+  }
+
+  /** Takes the words off the screen now (they fade out); with `text`, only if those are the words showing. */
+  hideCaption(nowMs: number, text?: string): void {
+    const caption = this.#caption;
+    if (!caption || (text !== undefined && caption.text !== text.replace(/\s+/g, ' ').trim().slice(0, 160))) return;
+    if (caption.endMs > nowMs) this.#caption = { ...caption, endMs: nowMs };
+  }
+
+  /** The words on the screen at the last update (including their fades), or null. */
+  get caption(): string | null {
+    return this.#captionAlpha(this.#lastMs ?? 0) > 0 ? this.#caption!.text : null;
   }
 
   /** Turns the automatic blinking on or off (a blink in progress finishes). */
@@ -313,6 +364,17 @@ export class ExpressiveFace {
       ctx.drawImage(source, (FACE_WIDTH - w) / 2, (FACE_HEIGHT - h) / 2, w, h);
       ctx.restore();
     }
+    const captionAlpha = this.#captionAlpha(this.#lastMs ?? 0);
+    if (captionAlpha > 0 && this.#caption) drawCaption(ctx, this.#caption.text, this.#caption.overMedia, captionAlpha);
+  }
+
+  /** Caption opacity: fades in, holds, fades out; 0 when there are no words. */
+  #captionAlpha(nowMs: number): number {
+    const c = this.#caption;
+    if (!c || nowMs < c.startMs || nowMs >= c.endMs + CAPTION_FADE_OUT_MS) return 0;
+    const fadeIn = Math.min(1, (nowMs - c.startMs) / CAPTION_FADE_IN_MS);
+    const fadeOut = nowMs <= c.endMs ? 1 : 1 - (nowMs - c.endMs) / CAPTION_FADE_OUT_MS;
+    return Math.max(0, Math.min(fadeIn, fadeOut));
   }
 
   /** Media opacity: fades in, holds, fades out; 0 when nothing is showing. */
@@ -461,4 +523,74 @@ function drawHeart(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.bezierCurveTo(x + w * 0.95, y - h * 1.05, x + w * 1.25, y + h * 0.15, x, y + h * 0.95);
   ctx.closePath();
   ctx.fill();
+}
+
+const captionFont = (size: number) => `800 ${size}px ${CAPTION_FONT}`;
+
+/**
+ * Draws a caption: over media, white with a black outline along the bottom (meme style); over the face, dark, in
+ * the space above the eyes (they sit low on the screen).
+ */
+function drawCaption(ctx: CanvasRenderingContext2D, text: string, overMedia: boolean, alpha: number): void {
+  ctx.save();
+  const { size, lines } = layoutCaption(ctx, text);
+  const lineHeight = Math.round(size * 1.12);
+  const top = overMedia ? FACE_HEIGHT - CAPTION_MARGIN * 0.7 - lineHeight * lines.length : CAPTION_MARGIN;
+  ctx.globalAlpha = alpha;
+  ctx.font = captionFont(size);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  lines.forEach((line, i) => {
+    const y = top + lineHeight * (i + 0.5);
+    if (overMedia) {
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = size * 0.2;
+      ctx.strokeText(line, FACE_WIDTH / 2, y);
+    }
+    ctx.fillStyle = overMedia ? '#ffffff' : '#111111';
+    ctx.fillText(line, FACE_WIDTH / 2, y);
+  });
+  ctx.restore();
+}
+
+/** The largest size whose lines fit; if even the smallest does not, its last line ends with "…". */
+function layoutCaption(ctx: CanvasRenderingContext2D, text: string): { size: number; lines: string[] } {
+  const maxWidth = FACE_WIDTH - 2 * CAPTION_MARGIN;
+  for (const [size, maxLines] of CAPTION_SIZES) {
+    ctx.font = captionFont(size);
+    const lines = wrapWords(ctx, text, maxWidth);
+    if (lines.length <= maxLines) return { size, lines };
+  }
+  const [size, maxLines] = CAPTION_SIZES[CAPTION_SIZES.length - 1]!;
+  ctx.font = captionFont(size);
+  const lines = wrapWords(ctx, text, maxWidth).slice(0, maxLines);
+  let last = lines[maxLines - 1]!;
+  while (last.length > 1 && ctx.measureText(`${last}…`).width > maxWidth) last = last.slice(0, -1).trimEnd();
+  lines[maxLines - 1] = `${last}…`;
+  return { size, lines };
+}
+
+/** Breaks text into lines no wider than maxWidth, between words (and inside a word too long for a line). */
+function wrapWords(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const lines: string[] = [];
+  let line = '';
+  for (const word of text.split(' ')) {
+    const next = line ? `${line} ${word}` : word;
+    if (ctx.measureText(next).width <= maxWidth) {
+      line = next;
+      continue;
+    }
+    if (line) lines.push(line);
+    let rest = word;
+    while (rest.length > 1 && ctx.measureText(rest).width > maxWidth) {
+      let cut = rest.length - 1;
+      while (cut > 1 && ctx.measureText(rest.slice(0, cut)).width > maxWidth) cut--;
+      lines.push(rest.slice(0, cut));
+      rest = rest.slice(cut);
+    }
+    line = rest;
+  }
+  if (line) lines.push(line);
+  return lines;
 }

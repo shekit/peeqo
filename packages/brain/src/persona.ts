@@ -43,16 +43,20 @@ export const GIF_TOOL: ToolSpec = {
 };
 
 /**
- * One call does the whole turn: what to say, how to look, and (now and then) a GIF. The model is made to call it,
- * so every turn takes a single round trip.
+ * One call does the whole turn: how to look, and what to say, with a GIF now and then; or, when Peeqo does not talk
+ * (`voice` off, with GIFs), a GIF every time with a caption over it. The model is asked to call it, so a turn takes
+ * a single round trip.
  */
-export function respondTool(gifs: boolean): ToolSpec {
+export function respondTool(gifs: boolean, voice = true): ToolSpec {
   const expression = (EXPRESS_TOOL.function.parameters as { properties: { expression: Record<string, unknown> } }).properties.expression;
+  const inGifs = gifs && !voice;
   return {
     type: 'function',
     function: {
       name: 'respond',
-      description: 'Your whole response: what you say, how your body shows it, and optionally a GIF on your face screen.',
+      description: inGifs
+        ? 'Your whole response: a reaction GIF on your face screen, a caption over it, and how your body shows it.'
+        : 'Your whole response: what you say, how your body shows it, and optionally a GIF on your face screen.',
       parameters: {
         type: 'object',
         properties: {
@@ -65,15 +69,31 @@ export function respondTool(gifs: boolean): ToolSpec {
           },
           intensity: { type: 'number', minimum: 0.2, maximum: 1, description: 'How strongly: 0.2 is a hint, 1 is full (the default).' },
           ...(gifs
-            ? { gif: { type: 'string', maxLength: 60, description: 'Optional: a short, vivid GIF search (2 to 4 words, e.g. "high five", "mind blown"). Now and then, about one turn in three.' } }
+            ? {
+                gif: {
+                  type: 'string',
+                  maxLength: 60,
+                  description: inGifs
+                    ? 'Your reaction GIF: a short, vivid search (2 to 4 words, e.g. "high five", "mind blown", "sleepy cat").'
+                    : 'Optional: a short, vivid GIF search (2 to 4 words, e.g. "high five", "mind blown"). Now and then, about one turn in three.',
+                },
+              }
             : {}),
           heard: {
             type: 'string',
             description: 'Only when they spoke to you (an audio clip) rather than typed: what they said, word for word. Empty if you could not make it out.',
           },
-          say: { type: 'string', description: 'What you say.' },
+          say: {
+            type: 'string',
+            ...(voice ? {} : { maxLength: 60 }),
+            description: voice
+              ? 'What you say.'
+              : inGifs
+                ? 'The caption over your GIF: at most six words, or empty if the GIF says it all. Anything they need to know (a time, a temperature) goes here.'
+                : 'Your caption: at most five words.',
+          },
         },
-        required: ['expressions', 'say'],
+        required: inGifs ? ['expressions', 'gif', 'say'] : ['expressions', 'say'],
         additionalProperties: false,
       },
     },
@@ -86,7 +106,7 @@ export interface PersonaContext {
   readonly tools?: readonly string[];
   /** Things that just happened (timers going off), so a reply to them makes sense. */
   readonly recent?: readonly string[];
-  /** Whether replies are spoken aloud (otherwise they appear as a short caption). */
+  /** Whether replies are spoken aloud (otherwise Peeqo answers with GIFs and short captions). */
   readonly voice: boolean;
   /** Whether show_gif is available. */
   readonly gifs: boolean;
@@ -101,14 +121,22 @@ export function systemPrompt(context: PersonaContext): string {
     'Personality: curious, warm, upbeat and a little mischievous. You love wordplay, small jokes and celebrating little wins. ' +
       'You are a companion, not an assistant: you react, tease gently, encourage, and get excited about things.',
     'How you answer:',
-    context.gifs
-      ? '- Always answer by calling respond: your words, the expression (or two) your body shows, and now and then a GIF.'
-      : '- Always answer by calling respond: your words and the expression (or two) your body shows.',
-    context.gifs ? '- A GIF shows on your face screen while you talk; use one when it says it better than words, about one turn in three.' : null,
-    '- Say at most two short, lively sentences (under 25 words). Plain words only: no lists, markdown or emoji (you cannot show them).',
-    context.voice
-      ? '- Your words are spoken aloud by your speaker, so write the way you would say them.'
-      : '- You cannot speak right now: reply with at most five words, which appear as a caption, and let your expressions and GIFs do the talking.',
+    ...(context.voice
+      ? [
+          context.gifs
+            ? '- Always answer by calling respond: your words, the expression (or two) your body shows, and now and then a GIF.'
+            : '- Always answer by calling respond: your words and the expression (or two) your body shows.',
+          context.gifs ? '- A GIF shows on your face screen while you talk; use one when it says it better than words, about one turn in three.' : null,
+          '- Say at most two short, lively sentences (under 25 words). Plain words only: no lists, markdown or emoji (you cannot show them).',
+          '- Your words are spoken aloud by your speaker, so write the way you would say them.',
+        ]
+      : context.gifs
+        ? [
+            "- You don't talk: you answer with GIFs. Always call respond with a reaction GIF for your face screen, a caption over it, and the expression (or two) your body shows.",
+            '- Pick GIFs that land: funny, warm and on point, the way a friend replies with the perfect GIF.',
+            '- Captions are at most six words, plain words only (no emoji). Anything they need to know (a time, a temperature, how long) goes in the caption; otherwise a short quip, or nothing if the GIF says it all.',
+          ]
+        : ['- Always answer by calling respond. You cannot speak right now: reply with at most five words, which appear as a caption, and let your expressions do the talking.']),
     "- If you don't know something or can't do it (you can't browse the web, see, or control other things yet), say so cheerfully. Never make up facts about the person.",
     context.tools && context.tools.length > 0
       ? `- You can also ${context.tools.join(', ')}. When asked, use those tools first, then respond with what you found (keep it short and natural).`

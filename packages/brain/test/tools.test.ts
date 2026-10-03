@@ -169,7 +169,7 @@ describe('Brain with tools', () => {
       [{ tool_calls: [call('a', 'set_timer', { minutes: 5, label: 'pasta' })] }, { tool_calls: [call('b', 'respond', { expressions: ['yes'], say: 'Pasta timer, five minutes!' })] }],
       requests,
     );
-    const brain = new Brain({ model, body, tools: [clockTool, ...alarmTools(alarms)], now: () => NOW });
+    const brain = new Brain({ model, body, voice: true, tools: [clockTool, ...alarmTools(alarms)], now: () => NOW });
     const turn = await brain.hear('set a pasta timer for 5 minutes');
     expect(turn.reply).toBe('Pasta timer, five minutes!');
     expect(alarms.list().map((a) => a.label)).toEqual(['pasta']);
@@ -210,7 +210,7 @@ describe('Brain with tools', () => {
         return { message: { role: 'assistant', content: null, tool_calls: [call(`x${requests.length}`, 'respond', { expressions: ['happy'], say: 'Sure!' })] }, finishReason: 'stop' };
       },
     };
-    const brain = new Brain({ model: slow, body, now: () => NOW });
+    const brain = new Brain({ model: slow, body, voice: true, now: () => NOW });
     const turn = brain.hear('tell me something');
     await new Promise((r) => setTimeout(r, 5));
     const announced = brain.announce('Ding! Your pasta timer is done!');
@@ -238,7 +238,7 @@ describe('Brain with tools', () => {
               }),
         )) as unknown as typeof fetch,
     });
-    const brain = new Brain({ model: new ScriptedModel({ random: () => 0 }), body, tools: [clockTool, ...alarmTools(alarms), weatherTool(weather)], now: () => NOW });
+    const brain = new Brain({ model: new ScriptedModel({ random: () => 0 }), body, voice: true, tools: [clockTool, ...alarmTools(alarms), weatherTool(weather)], now: () => NOW });
     expect((await brain.hear('Set a timer for 10 minutes please')).reply).toBe('Timer set! It goes off in 10 minutes.');
     expect(alarms.list()).toHaveLength(1);
     expect((await brain.hear("What's the weather in Paris?")).reply).toBe('In Paris right now: partly cloudy, 18°C (64°F), feels like 17°C (63°F), wind 9 km/h.');
@@ -248,5 +248,11 @@ describe('Brain with tools', () => {
     const spoken = await brain.hear({ audio: 'UklGRg==' });
     expect(spoken.reply).toMatch(/offline brain can't understand speech/);
     expect(log.filter((l) => l.startsWith('say:'))).toHaveLength(5);
+    // Not talking (the default), its answers are short captions.
+    const quiet = new Brain({ model: new ScriptedModel({ random: () => 0 }), body, tools: [clockTool, ...alarmTools(alarms), weatherTool(weather)], now: () => NOW });
+    expect((await quiet.hear("What's the weather in Paris?")).reply).toBe('Paris: partly cloudy, 18°C (64°F)');
+    expect((await quiet.hear('set a timer for 5 minutes')).reply).toBe('Timer set! It goes off in 5 minutes.');
+    expect((await quiet.hear('how long is left on my timers?')).reply).toBe('5 minutes timer in 5 minutes.');
+    expect((await quiet.hear({ audio: 'UklGRg==' })).reply).toBe('Offline brain: please type!');
   });
 });

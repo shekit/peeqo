@@ -14,10 +14,24 @@ export interface Utterance {
 export interface BrainBody {
   setState(state: CharacterState): void;
   express(name: ExpressionName, intensity: number): void;
-  /** Shows a GIF on the face screen; resolves once it is showing (or could not be loaded). Skips it if `signal` aborts first. */
+  /**
+   * Shows a GIF on the face screen; resolves once it is showing (or could not be loaded). Skips it if `signal`
+   * aborts first, and takes it down if `signal` aborts while it shows.
+   */
   showGif(gif: Gif, signal?: AbortSignal): Promise<void>;
-  /** Speaks the text aloud (voice on) or shows it as a caption; resolves when finished. */
-  say(text: string, voice: boolean): Promise<void>;
+  /**
+   * Speaks the text aloud (voice on), or shows it on the face screen as a caption: over the GIF if one is showing
+   * (which then stays until it has been read), otherwise above the eyes. Resolves when finished, or as soon as
+   * `signal` aborts (stopping it).
+   */
+  say(text: string, voice: boolean, signal?: AbortSignal): Promise<void>;
+}
+
+export interface AnnounceOptions {
+  /** How Peeqo shows it (default alert). */
+  readonly expression?: ExpressionName;
+  /** A GIF search to show with it, when Peeqo answers in GIFs (voice off). */
+  readonly gif?: string;
 }
 
 export type BrainEvent =
@@ -35,7 +49,10 @@ export interface BrainOptions {
   readonly body: BrainBody;
   /** GIF search, or null to go without. */
   readonly gifs?: KlipyClient | null;
-  /** Speak replies aloud (default true); off, replies are short captions. */
+  /**
+   * Speak replies aloud. Off (the default, as Peeqo has always been), it answers with GIFs: one every turn, with a
+   * short caption over it (just the caption when there are no GIFs).
+   */
   readonly voice?: boolean;
   /** How many past exchanges the model remembers (default 12). */
   readonly memory?: number;
@@ -69,10 +86,11 @@ const FALLBACK_REPLY = 'Oops, my thoughts got tangled. Try me again?';
 /**
  * Peeqo's mind. hear() runs one turn, from typed words or a recording of speech (sent to the model as it is): Peeqo
  * thinks (the model is asked, with the conversation so far; it may use tools such as the weather first, then
- * answers by calling respond: its words, one or two expressions and maybe a GIF), shows how it feels, then speaks
- * while any GIF plays. It sets the character's state as it goes: thinking while the model works, speaking while it
- * talks, idle after. A new turn interrupts one still in progress, as a person cutting in would. announce() lets it
- * speak up unprompted, for timers and reminders. (Separate express and show_gif tools are still understood.)
+ * answers by calling respond: one or two expressions, a GIF and a caption, or with the voice on, its words and now
+ * and then a GIF), shows how it feels, then shows the GIF with its caption over it (or speaks while any GIF plays).
+ * It sets the character's state as it goes: thinking while the model works, idle once it answers (speaking while it
+ * talks, with the voice on). A new turn interrupts one still in progress, as a person cutting in would. announce()
+ * lets it speak up unprompted, for timers and reminders. (Separate express and show_gif tools are still understood.)
  */
 export class Brain {
   voice: boolean;
@@ -97,7 +115,7 @@ export class Brain {
     this.#model = options.model;
     this.#body = options.body;
     this.#gifs = options.gifs ?? null;
-    this.voice = options.voice ?? true;
+    this.voice = options.voice ?? false;
     this.#memory = options.memory ?? 12;
     this.#now = options.now ?? (() => new Date());
     this.#random = options.random ?? Math.random;
@@ -182,8 +200,11 @@ export class Brain {
         : { role: 'user', content: said },
     ];
     const asked = messages.length - 1;
+    // Peeqo does not talk: it answers with a GIF every turn, with a caption over it.
+    const inGifs = !this.voice && this.#gifs !== null;
+    let rested = false;
     try {
-      const tools = [respondTool(this.#gifs !== null), ...[...this.#tools.values()].map((tool) => tool.spec)];
+      const tools = [respondTool(this.#gifs !== null, this.voice), ...[...this.#tools.values()].map((tool) => tool.spec)];
       const abilities = [...this.#tools.values()].flatMap((tool) => (tool.ability ? [tool.ability] : []));
       let reply = '';
       let gifShowing: Promise<void> | null = null;
@@ -215,8 +236,9 @@ export class Brain {
           if (turn.signal.aborted) return { ...result, interrupted: true };
         }
         reply ||= (response.message.content ?? '').trim();
-        // Words arrived (or there is nothing left to do): the turn is complete. Otherwise (tools were used) go on.
-        if (reply || calls.length === 0) break;
+        // Words arrived, or a GIF when answering in GIFs (or there is nothing left to do): the turn is complete.
+        // Otherwise (tools were used) go on.
+        if (reply || (inGifs && gifShowing) || calls.length === 0) break;
       }
       if (turn.signal.aborted) return { ...result, interrupted: true };
       // The recording is not kept: the conversation remembers what was heard, which is all a later turn needs.
@@ -224,23 +246,33 @@ export class Brain {
       this.#history = this.#trim(messages);
       result.reply = reply;
       this.#onEvent({ type: 'reply', text: reply, model: this.#model.name, ms: Date.now() - started });
-      if (reply) {
-        this.#body.setState('speaking');
-        await this.#body.say(reply, this.voice);
+      if (this.voice) {
+        if (reply) {
+          this.#body.setState('speaking');
+          await this.#body.say(reply, true, turn.signal);
+        }
+        if (gifShowing) await gifShowing;
+      } else {
+        // The GIF first, then its caption over it.
+        if (gifShowing) await gifShowing;
+        if (turn.signal.aborted) return { ...result, interrupted: true };
+        this.#body.setState('idle');
+        rested = true;
+        if (reply) await this.#body.say(reply, false, turn.signal);
       }
-      if (gifShowing) await gifShowing;
       if (turn.signal.aborted) return { ...result, interrupted: true };
     } catch (error) {
       if (turn.signal.aborted) return { ...result, interrupted: true };
       result.error = error instanceof Error ? error.message : String(error);
       this.#onEvent({ type: 'error', message: result.error });
       this.#body.express('oops', 0.8);
-      this.#body.setState('speaking');
-      await this.#body.say(this.voice ? FALLBACK_REPLY : 'Oops!', this.voice);
+      this.#body.setState(this.voice ? 'speaking' : 'idle');
+      rested = !this.voice;
+      await this.#body.say(this.voice ? FALLBACK_REPLY : 'Oops!', this.voice, turn.signal);
     } finally {
       if (this.#turn === turn) {
         this.#turn = null;
-        this.#body.setState('idle');
+        if (!rested) this.#body.setState('idle');
       }
       settle();
     }
@@ -248,18 +280,33 @@ export class Brain {
   }
 
   /**
-   * Speaks up unprompted (a timer going off, a reminder), with an expression, once any turn under way has finished.
-   * The model is told about it on the next turns, so "thanks!" makes sense to it.
+   * Speaks up unprompted (a timer going off, a reminder), with an expression (and a GIF, when answering in GIFs),
+   * once any turn under way has finished. A new turn cuts it short. The model is told about it on the next turns,
+   * so "thanks!" makes sense to it.
    */
-  async announce(text: string, expression: ExpressionName = 'alert'): Promise<void> {
+  async announce(text: string, options: AnnounceOptions = {}): Promise<void> {
     while (this.#turn) await this.#turnDone;
-    this.#recent.push({ atMs: this.#now().getTime(), text });
-    this.#recent = this.#recent.slice(-RECENT_EVENTS);
-    this.#onEvent({ type: 'announced', text });
-    this.#body.express(expression, 1);
-    this.#body.setState('speaking');
-    await this.#body.say(text, this.voice);
-    if (!this.#turn) this.#body.setState('idle');
+    const turn = new AbortController();
+    this.#turn = turn;
+    let settle: () => void = () => undefined;
+    this.#turnDone = new Promise((resolve) => (settle = resolve));
+    try {
+      this.#recent.push({ atMs: this.#now().getTime(), text });
+      this.#recent = this.#recent.slice(-RECENT_EVENTS);
+      this.#onEvent({ type: 'announced', text });
+      this.#body.express(options.expression ?? 'alert', 1);
+      const query = options.gif?.trim().slice(0, 60);
+      if (!this.voice && this.#gifs && query) await this.#findAndShowGif(query, { gif: null }, turn.signal);
+      if (turn.signal.aborted) return;
+      this.#body.setState(this.voice ? 'speaking' : 'idle');
+      await this.#body.say(text, this.voice, turn.signal);
+    } finally {
+      if (this.#turn === turn) {
+        this.#turn = null;
+        if (this.voice) this.#body.setState('idle');
+      }
+      settle();
+    }
   }
 
   #recentEvents(): string[] {

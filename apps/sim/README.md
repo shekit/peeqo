@@ -47,11 +47,13 @@ npm run check:clearance -w @peeqo/sim        # re-measures the real meshes at 50
 `Brain` (`packages/brain`) is Peeqo's mind. In the sim, talk to it in the **Talk to Peeqo** box, or out loud.
 
 - **A turn:**
-  - Peeqo thinks; the model answers with one `respond` call: its words, one or two expressions and sometimes a
-    GIF search, all in one round trip (about 2 s).
-  - It shows how it feels.
-  - It speaks while any GIF plays on its face screen.
-  - Its state follows along: listening, then thinking, then speaking, then idle.
+  - Peeqo thinks; the model answers with one `respond` call: one or two expressions, a reaction GIF and a caption
+    of at most six words, all in one round trip (about 2 to 4 s).
+  - It shows how it feels, then the GIF plays on its face screen with the caption over it, meme style.
+  - Peeqo doesn't talk, as in 2019. Facts (a time, a temperature) go in the caption. Without GIFs, the caption
+    shows above its eyes.
+  - **Speak aloud** turns on the browser's voice instead: spoken replies, with a GIF now and then.
+  - Its state follows along: listening, then thinking, then idle (speaking, with the voice on).
 - **Offline brain (the default):** a scripted stand-in with written answers in Peeqo's voice. It needs no key
   or network, and the tests use it. It can use the tools too, but cannot understand speech.
 - **Live brain:** OpenRouter, defaulting to `google/gemini-3.8-flash` (it takes audio and uses tools).
@@ -67,9 +69,10 @@ npm run check:clearance -w @peeqo/sim        # re-measures the real meshes at 50
     It needs `npm run setup -w @peeqo/wakeword` once (Python 3.10 or newer); see `packages/wakeword`.
   - The page streams the microphone to the dev server (`/api/voice`), where the detector also judges when you
     have stopped talking. Without it set up, Mic still works and judges by loudness.
-  - Peeqo doesn't listen while it is talking, so it doesn't hear itself.
+  - With **Speak aloud** on, Peeqo doesn't listen while it is talking, so it doesn't hear itself.
 - **Tools:** the model can check the time, set, list and cancel timers and reminders, and look up the weather.
-  - Timers and reminders are kept in the page (they survive a reload), and Peeqo announces them when due.
+  - Timers and reminders are kept in the page (they survive a reload), and Peeqo announces them when due, with a
+    GIF.
   - Weather comes from Open-Meteo (free, no key). Set `PEEQO_HOME` in `.env` (e.g. `Pune, India`) so "what's the
     weather?" needs no place.
   - A turn that uses a tool takes two model calls: about 5 to 8 s with speech.

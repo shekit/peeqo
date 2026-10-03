@@ -316,12 +316,13 @@ try {
   check('state "listening": attentive face and listening ring', s.emotion === 'listening' && (await hook('ledPattern')) === 'listen');
   await hook('setCharacterState', 'idle');
 
-  // The brain (the offline stand-in): it hears, thinks, shows how it feels, plays a GIF and answers.
-  await hook('setVoice', false); // no speech in a headless browser; replies are captions
+  // The brain (the offline stand-in): it hears, thinks, shows how it feels, and answers with a GIF and a caption
+  // over it (the default: Peeqo does not talk).
   let turn = await hook('talk', 'Hello Peeqo!');
-  check('brain: answers a greeting with words and an expression', turn.reply.length > 0 && turn.expressions.includes('hello') && !turn.error, JSON.stringify(turn));
+  check('brain: answers a greeting with a GIF, a caption and an expression', turn.reply.length > 0 && turn.gif === 'stub-shrug' && turn.expressions.includes('hello') && !turn.error, JSON.stringify(turn));
   const pendingTurn = hook('talk', 'show me a cat');
-  s = await waitFor((x) => x.showingMedia, 6000);
+  s = await waitFor((x) => x.showingMedia && x.caption === 'Cat!!', 6000); // (the greeting's may still be fading)
+  check('brain: captions the GIF on the face', !!s);
   if (s) {
     await hook('setView', 'face');
     await page.waitForTimeout(500);
@@ -334,10 +335,10 @@ try {
   check('brain: returns to idle after the turn', !!s && (await hook('character')).state === 'idle');
 
   // Tools, offline: a timer is set by the stand-in brain and announced when it goes off.
-  turn = await hook('talk', 'set a timer for 8 seconds'); // long enough to outlast Peeqo saying so
+  turn = await hook('talk', 'set a timer for 12 seconds'); // long enough to outlast its GIF
   const set = await hook('timers');
   check('brain: sets a timer through its tools', turn.reply.startsWith('Timer set!') && set.length === 1, `${turn.reply} | ${JSON.stringify(set)}`);
-  const announced = await page.waitForFunction(() => [...document.querySelectorAll('.transcript .line')].some((l) => l.textContent.includes('Ding!')), null, { timeout: 15000 }).then(() => true, () => false);
+  const announced = await page.waitForFunction(() => [...document.querySelectorAll('.transcript .line')].some((l) => l.textContent.includes('Ding!')), null, { timeout: 20000 }).then(() => true, () => false);
   check('brain: announces the timer when it goes off', announced && (await hook('timers')).length === 0);
 
   // A 2019 reaction with local media plays it on the face, as the 2019 robot did.

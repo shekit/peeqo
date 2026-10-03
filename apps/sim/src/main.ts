@@ -273,10 +273,10 @@ async function main(): Promise<void> {
     },
   });
   const weather = new Weather();
+  // Peeqo answers with GIFs and captions, as it always has; the voice (Speak aloud) is optional.
   const brain = new Brain({
     model: offline,
     body,
-    voice: true,
     tools: [clockTool, ...alarmTools(alarms), weatherTool(weather)],
     onEvent: (event) => {
       if (event.type === 'heard') talk.setStatus(`${brain.modelName}: thinking…`);
@@ -288,7 +288,9 @@ async function main(): Promise<void> {
   });
   alarms.onDue = (alarm) => {
     poke();
-    void brain.announce(alarm.kind === 'timer' ? `Ding! Your ${alarm.label} is done!` : `Reminder: ${alarm.label}!`);
+    void brain.announce(alarm.kind === 'timer' ? `Ding! Your ${alarm.label} is done!` : `Reminder: ${alarm.label}!`, {
+      gif: alarm.kind === 'timer' ? 'times up' : 'dont forget',
+    });
   };
   const hear = (text: string) => {
     poke();
@@ -368,6 +370,7 @@ async function main(): Promise<void> {
       eyes: faceStyle === 'classic' ? classic.eyeRadii : expressive.state().eyes[0],
       emotion: expressive.emotion,
       showingMedia: expressive.showingMedia,
+      caption: expressive.caption,
     }),
     /** Largest gap (mm) between the drawn horn tips and the kinematics, to prove the model matches the maths. */
     hornTipError: () => {

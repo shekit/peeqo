@@ -12,20 +12,29 @@ function run(face: ExpressiveFace, fromMs: number, seconds: number, each?: (nowM
   return now;
 }
 
-/** A stand-in 2D context that records what is drawn and fails on bad numbers. */
+/** A stand-in 2D context that records what is drawn (and the words written) and fails on bad numbers. */
 function recordingContext() {
   const calls: string[] = [];
+  const texts: { text: string; x: number; y: number }[] = [];
   const check = (name: string, args: unknown[]) => {
     for (const a of args) if (typeof a === 'number' && !Number.isFinite(a)) throw new Error(`${name} got ${a}`);
     calls.push(name);
+    if (name === 'fillText') texts.push({ text: String(args[0]), x: Number(args[1]), y: Number(args[2]) });
   };
   const ctx = new Proxy(
     {},
     {
-      get: (_t, prop) => (prop === 'calls' ? calls : (...args: unknown[]) => check(String(prop), args)),
+      get: (_t, prop) =>
+        prop === 'calls'
+          ? calls
+          : prop === 'texts'
+            ? texts
+            : prop === 'measureText'
+              ? (text: string) => ({ width: text.length * 26 }) // about right for bold 46 px type
+              : (...args: unknown[]) => check(String(prop), args),
       set: () => true,
     },
-  ) as CanvasRenderingContext2D & { calls: string[] };
+  ) as CanvasRenderingContext2D & { calls: string[]; texts: { text: string; x: number; y: number }[] };
   return ctx;
 }
 
@@ -168,6 +177,57 @@ describe('ExpressiveFace', () => {
     run(face, now, 0.35);
     expect(face.showingMedia).toBe(false);
     expect(() => face.showMedia({ ...media, width: 0 }, now, 100)).toThrow(/size/);
+  });
+
+  it('captions media along its bottom, keeping it up until the words are read', () => {
+    const face = new ExpressiveFace({ seed: 7 });
+    let now = run(face, 0, 0.2);
+    const media = { source: {} as CanvasImageSource, width: 640, height: 414 };
+    face.showMedia(media, now, 1000);
+    now = run(face, now, 0.3);
+    const gone = face.showCaption('  Eighteen   degrees and sunny! ', now, 3000); // longer than the media had left
+    expect(face.mediaEndMs()).toBe(now + 3000 + 280);
+    expect(face.mediaEndMs(media.source)).toBe(now + 3000 + 280);
+    expect(face.mediaEndMs({} as CanvasImageSource)).toBe(0); // not what is showing
+    expect(gone).toBe(now + 3000 + 280);
+    now = run(face, now, 0.5);
+    expect(face.caption).toBe('Eighteen degrees and sunny!');
+    const ctx = recordingContext();
+    face.draw(ctx);
+    expect(ctx.calls).toContain('strokeText'); // outlined, meme style
+    expect(ctx.texts.map((t) => t.text).join(' ')).toBe('Eighteen degrees and sunny!');
+    expect(Math.min(...ctx.texts.map((t) => t.y))).toBeGreaterThan(FACE_HEIGHT / 2);
+    now = run(face, now, 2.4); // past the media's own end: both still up
+    expect(face.showingMedia && face.caption !== null).toBe(true);
+    run(face, now, 0.5);
+    expect(face.showingMedia || face.caption !== null).toBe(false);
+  });
+
+  it('captions the face above the eyes when nothing else is showing, fitting long words onto the screen', () => {
+    const face = new ExpressiveFace({ seed: 3 });
+    let now = run(face, 0, 0.2);
+    face.showCaption('It is 9:41 PM', now, 1500);
+    now = run(face, now, 0.4);
+    let ctx = recordingContext();
+    face.draw(ctx);
+    expect(ctx.calls).not.toContain('strokeText');
+    const top = ctx.texts.map((t) => t.y);
+    expect(Math.max(...top)).toBeLessThan(ExpressiveFace.EYE_Y - ExpressiveFace.EYE_RADIUS - 40);
+    // Far too long: shrunk, wrapped and cut with an ellipsis, every line inside the screen.
+    face.showCaption('supercalifragilisticexpialidocious '.repeat(8), now, 1500);
+    now = run(face, now, 0.4);
+    ctx = recordingContext();
+    face.draw(ctx);
+    expect(ctx.texts.length).toBeLessThanOrEqual(3);
+    expect(ctx.texts.at(-1)!.text.endsWith('…')).toBe(true);
+    for (const t of ctx.texts) expect(t.text.length * 26).toBeLessThanOrEqual(FACE_WIDTH - 80);
+    face.hideCaption(now, 'something else'); // not what is showing: stays
+    now = run(face, now, 0.4);
+    expect(face.caption).not.toBeNull();
+    face.hideCaption(now);
+    run(face, now, 0.4);
+    expect(face.caption).toBeNull();
+    expect(() => face.showCaption('   ', now, 1000)).toThrow(/words/);
   });
 
   it('rejects unknown emotions', () => {

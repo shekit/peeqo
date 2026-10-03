@@ -30,7 +30,7 @@ export function createTalkPanel(host: HTMLElement, callbacks: TalkCallbacks): Ta
   const input = el('input', { type: 'text', placeholder: 'Say something to Peeqo…', 'aria-label': 'Message', maxlength: 500 });
   const send = el('button', { type: 'button', text: 'Send' });
   const mic = el('button', { type: 'button', text: 'Mic', title: 'Say something: it is recorded and sent to the model as it is' });
-  const voice = el('input', { type: 'checkbox', checked: true });
+  const voice = el('input', { type: 'checkbox' });
   const wake = el('input', { type: 'checkbox', disabled: true });
   const wakeLabel = el('label', { class: 'check', title: 'Needs npm run sim and npm run setup -w @peeqo/wakeword' }, wake, ' Wake word ("hey jarvis")');
   wake.addEventListener('change', () => callbacks.onWakeWord(wake.checked));
@@ -63,7 +63,7 @@ export function createTalkPanel(host: HTMLElement, callbacks: TalkCallbacks): Ta
       'Talk to Peeqo',
       transcript,
       el('div', { class: 'talk-row' }, input, send, mic),
-      el('div', { class: 'row talk-options' }, el('label', { class: 'check' }, voice, ' Voice'), wakeLabel, brain),
+      el('div', { class: 'row talk-options' }, el('label', { class: 'check', title: 'Off: Peeqo answers with GIFs and captions, as it always has' }, voice, ' Speak aloud'), wakeLabel, brain),
       status,
     ),
   );
