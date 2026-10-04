@@ -1,8 +1,9 @@
 import { expressionSpec, isExpressionName, type CharacterState, type ExpressionName } from '@peeqo/character';
 import { GifBudgetError, type Gif, type KlipyClient } from './klipy.ts';
+import type { Memory } from './memory.ts';
 import type { ChatMessage, ChatModel, ToolCall } from './openrouter.ts';
-import { respondTool, systemPrompt } from './persona.ts';
-import type { BrainTool } from './tools.ts';
+import { respondTool, systemPrompt, tidyPrompt } from './persona.ts';
+import { memoryTools, type BrainTool } from './tools.ts';
 
 /** Something said out loud: a recording, sent to the model as it is (no transcribing first). */
 export interface Utterance {
@@ -34,6 +35,18 @@ export interface AnnounceOptions {
   readonly gif?: string;
 }
 
+/** The recent conversation, as saved between runs. */
+export interface SavedConversation {
+  readonly messages: readonly ChatMessage[];
+  /** When they last talked (ms since 1970), or null. */
+  readonly lastTalkMs: number | null;
+}
+
+export interface ConversationStore {
+  load(): Promise<SavedConversation | null> | SavedConversation | null;
+  save(conversation: SavedConversation): Promise<void> | void;
+}
+
 export type BrainEvent =
   | { readonly type: 'heard'; readonly text: string }
   /** What the model heard in a recording (it writes it down as it answers). */
@@ -54,8 +67,15 @@ export interface BrainOptions {
    * short caption over it (just the caption when there are no GIFs).
    */
   readonly voice?: boolean;
-  /** How many past exchanges the model remembers (default 12). */
-  readonly memory?: number;
+  /**
+   * How many recent exchanges the model sees word for word (default 12). Older ones drop out a few at a time, and
+   * anything lasting in them is saved to `memory` first.
+   */
+  readonly recentTurns?: number;
+  /** What Peeqo remembers about its person between conversations; gives the model the remember and forget tools. */
+  readonly memory?: Memory | null;
+  /** Where the recent conversation is saved, so it carries on after a restart (see restore()). */
+  readonly conversation?: ConversationStore | null;
   /** What else it can do before answering (the time, timers, reminders, the weather). */
   readonly tools?: readonly BrainTool[];
   readonly now?: () => Date;
@@ -76,6 +96,8 @@ export interface TurnResult {
 
 /** Model calls allowed per turn: tools first (each answered), then the reply; a reply without words gets a follow-up. */
 const MAX_CALLS = 4;
+/** A gap after which the model is told when they last talked. */
+const GAP_MS = 30 * 60_000;
 /** Announcements the model is told about, so it knows what just happened ("thanks!" after a timer). */
 const RECENT_EVENTS = 3;
 const RECENT_EVENT_MS = 30 * 60_000;
@@ -97,7 +119,12 @@ export class Brain {
   #model: ChatModel;
   readonly #body: BrainBody;
   #gifs: KlipyClient | null;
-  readonly #memory: number;
+  readonly #recentTurns: number;
+  readonly #memory: Memory | null;
+  readonly #conversation: ConversationStore | null;
+  #lastTalkMs: number | null = null;
+  /** Saves of the conversation happen one after another, in order. */
+  #saving: Promise<void> = Promise.resolve();
   readonly #now: () => Date;
   readonly #random: () => number;
   readonly #onEvent: (event: BrainEvent) => void;
@@ -116,11 +143,25 @@ export class Brain {
     this.#body = options.body;
     this.#gifs = options.gifs ?? null;
     this.voice = options.voice ?? false;
-    this.#memory = options.memory ?? 12;
+    this.#recentTurns = Math.max(1, options.recentTurns ?? 12);
+    this.#memory = options.memory ?? null;
+    this.#conversation = options.conversation ?? null;
     this.#now = options.now ?? (() => new Date());
     this.#random = options.random ?? Math.random;
     this.#onEvent = options.onEvent ?? (() => undefined);
-    this.#tools = new Map((options.tools ?? []).map((tool) => [tool.spec.function.name, tool]));
+    const tools = [...(options.tools ?? []), ...(this.#memory ? memoryTools(this.#memory) : [])];
+    this.#tools = new Map(tools.map((tool) => [tool.spec.function.name, tool]));
+  }
+
+  /** Loads what was saved: the memory, and the recent conversation (a damaged one is dropped). */
+  async restore(): Promise<void> {
+    await this.#memory?.load();
+    const saved = await this.#conversation?.load();
+    if (!saved || !Array.isArray(saved.messages)) return;
+    const messages = saved.messages.filter((m) => m && (m.role === 'user' || m.role === 'assistant' || m.role === 'tool'));
+    if (!wellFormed(messages) || this.#history.length > 0) return; // (a turn that already started keeps its own)
+    this.#history = this.#trim([...messages]);
+    this.#lastTalkMs = typeof saved.lastTalkMs === 'number' && Number.isFinite(saved.lastTalkMs) ? saved.lastTalkMs : null;
   }
 
   get modelName(): string {
@@ -160,11 +201,13 @@ export class Brain {
     this.#cancelPending();
   }
 
-  /** Forgets the conversation. */
+  /** Forgets the conversation (not the memory). */
   reset(): void {
     this.#turn?.abort();
     this.#cancelPending();
     this.#history = [];
+    this.#lastTalkMs = null;
+    this.#save();
   }
 
   #cancelPending(): void {
@@ -209,9 +252,18 @@ export class Brain {
       let reply = '';
       let gifShowing: Promise<void> | null = null;
       for (let call = 0; call < MAX_CALLS; call++) {
+        const now = this.#now();
         const system: ChatMessage = {
           role: 'system',
-          content: systemPrompt({ now: this.#now(), voice: this.voice, gifs: this.#gifs !== null, tools: abilities, recent: this.#recentEvents() }),
+          content: systemPrompt({
+            now,
+            voice: this.voice,
+            gifs: this.#gifs !== null,
+            tools: abilities,
+            recent: this.#recentEvents(),
+            ...(this.#memory ? { memory: this.#memory.facts } : {}),
+            lastTalk: this.#lastTalkMs !== null && now.getTime() - this.#lastTalkMs > GAP_MS ? new Date(this.#lastTalkMs) : null,
+          }),
         };
         // Tools are offered and the model chooses (newer Claude models on OpenRouter reject a forced tool_choice).
         const response = await this.#model.complete({ messages: [system, ...messages], tools }, turn.signal);
@@ -244,6 +296,8 @@ export class Brain {
       // The recording is not kept: the conversation remembers what was heard, which is all a later turn needs.
       if (spoken) messages[asked] = { role: 'user', content: result.heard || '(something I could not make out)' };
       this.#history = this.#trim(messages);
+      this.#lastTalkMs = this.#now().getTime();
+      this.#save();
       result.reply = reply;
       this.#onEvent({ type: 'reply', text: reply, model: this.#model.name, ms: Date.now() - started });
       if (this.voice) {
@@ -436,10 +490,101 @@ export class Brain {
     return result;
   }
 
-  /** Keeps the last `memory` exchanges, cutting only at a person's turn so tool calls stay with their results. */
+  /**
+   * Keeps the recent exchanges, cutting only at a person's turn so tool calls stay with their results. A few extra
+   * are kept before cutting, so older exchanges go to memory a few at a time rather than one every turn.
+   */
   #trim(messages: ChatMessage[]): ChatMessage[] {
     const starts = messages.flatMap((m, i) => (m.role === 'user' ? [i] : []));
-    if (starts.length <= this.#memory) return messages;
-    return messages.slice(starts[starts.length - this.#memory]);
+    const slack = Math.max(1, Math.round(this.#recentTurns / 3));
+    if (starts.length <= this.#recentTurns + slack) return messages;
+    const cut = starts[starts.length - this.#recentTurns]!;
+    void this.#tidy(messages.slice(0, cut));
+    return messages.slice(cut);
   }
+
+  #save(): void {
+    const store = this.#conversation;
+    if (!store) return;
+    const conversation: SavedConversation = { messages: this.#history, lastTalkMs: this.#lastTalkMs };
+    this.#saving = this.#saving
+      .then(() => store.save(conversation))
+      .catch((error: unknown) => this.#onEvent({ type: 'error', message: `The conversation could not be saved: ${error instanceof Error ? error.message : String(error)}` }));
+  }
+
+  /** Settles once every save of the conversation so far has finished. */
+  flush(): Promise<void> {
+    return Promise.all([this.#saving, this.#memory?.flush()]).then(() => undefined);
+  }
+
+  /** Older exchanges are dropping out of the conversation: the model saves anything lasting from them first. */
+  async #tidy(dropped: readonly ChatMessage[]): Promise<void> {
+    const memory = this.#memory;
+    const transcript = transcriptOf(dropped);
+    if (!memory || !transcript) return;
+    const tools = memoryTools(memory);
+    try {
+      const facts = memory.facts.map((fact) => `- ${fact}`).join('\n') || '(nothing yet)';
+      const response = await this.#model.complete({
+        messages: [
+          { role: 'system', content: tidyPrompt() },
+          { role: 'user', content: `What you remember about them:\n${facts}\n\nThe older conversation:\n${transcript}` },
+        ],
+        tools: tools.map((tool) => tool.spec),
+      });
+      for (const call of response.message.tool_calls ?? []) {
+        const tool = tools.find((t) => t.spec.function.name === call.function.name);
+        if (!tool) continue;
+        let args: Record<string, unknown> = {};
+        try {
+          const parsed: unknown = JSON.parse(call.function.arguments || '{}');
+          if (parsed && typeof parsed === 'object') args = parsed as Record<string, unknown>;
+        } catch {
+          continue;
+        }
+        this.#report(call, String(await tool.run(args, { now: this.#now(), signal: new AbortController().signal })));
+      }
+    } catch (error) {
+      this.#onEvent({ type: 'error', message: `Tidying memory failed: ${error instanceof Error ? error.message : String(error)}` });
+    }
+  }
+}
+
+/** What was said, as plain lines ("Them: …", "Peeqo: …"), for tidying memory; the most recent 6000 characters. */
+function transcriptOf(messages: readonly ChatMessage[]): string {
+  const lines: string[] = [];
+  for (const m of messages) {
+    if (m.role === 'user') lines.push(`Them: ${typeof m.content === 'string' ? m.content : m.content.flatMap((p) => (p.type === 'text' ? [p.text] : [])).join(' ')}`);
+    if (m.role !== 'assistant') continue;
+    if (m.content) lines.push(`Peeqo: ${m.content}`);
+    for (const call of m.tool_calls ?? []) {
+      if (call.function.name !== 'respond') continue;
+      try {
+        const say = (JSON.parse(call.function.arguments) as { say?: unknown }).say;
+        if (typeof say === 'string' && say.trim()) lines.push(`Peeqo: ${say.trim()}`);
+      } catch {
+        // not worth keeping
+      }
+    }
+  }
+  return lines.join('\n').slice(-6000);
+}
+
+/**
+ * A conversation the model will accept: it starts with the person, and every tool call is answered (an edited or
+ * damaged file might break that).
+ */
+function wellFormed(messages: readonly ChatMessage[]): boolean {
+  if (messages.length > 0 && messages[0]!.role !== 'user') return false;
+  const open = new Set<string>();
+  for (const m of messages) {
+    if (m.role === 'user' && open.size > 0) return false;
+    if (m.role === 'user' && typeof m.content !== 'string') return false;
+    if (m.role === 'assistant') {
+      if (open.size > 0) return false;
+      for (const call of m.tool_calls ?? []) open.add(call.id);
+    }
+    if (m.role === 'tool' && !open.delete(m.tool_call_id)) return false;
+  }
+  return open.size === 0;
 }

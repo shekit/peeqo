@@ -4,6 +4,8 @@
 //   GET  /api/gifs/search?q=…               Klipy GIF search: cached on disk, hourly budget, media URLs made local
 //   GET  /api/gifs/media?u=…                fetches Klipy media (same-origin, so the face can draw it), cached
 //   GET  /api/status                        what is available
+//   GET/PUT /api/memory                     what Peeqo remembers about you: memory.md in the data folder
+//   GET/PUT /api/conversation               the recent conversation: conversation.json in the data folder
 
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -14,17 +16,19 @@ import { GifBudgetError, KlipyClient, type CachedSearch, type Gif } from '@peeqo
 export interface ApiOptions {
   readonly openRouterKey?: string | undefined;
   readonly klipyKey?: string | undefined;
-  /** The weather's home ("London", "Pune, India"), from PEEQO_HOME in .env. */
-  readonly home?: string | undefined;
   /** Whether the wake word detector is set up. */
   readonly voice?: boolean;
   /** Where searches and media are cached (gitignored). */
   readonly cacheDir: string;
+  /** Where Peeqo's memory (memory.md) and recent conversation (conversation.json) are kept (gitignored). */
+  readonly dataDir: string;
 }
 
 type Next = (error?: unknown) => void;
 /** Room for a spoken message (a 20 s recording is about 0.9 MB as base64) plus the conversation. */
 const MAX_BODY = 4_000_000;
+const MAX_NOTES = 64_000;
+const MAX_CONVERSATION = 2_000_000;
 const MEDIA_HOSTS = new Set(['static.klipy.com']);
 /** Models the proxy will pay for (Claude, and Gemini, which hears speech), and the longest reply it allows. */
 const ALLOWED_MODEL = /^(anthropic\/claude-|google\/gemini-)[\w.-]+$/;
@@ -50,6 +54,9 @@ export function fromThisPage(req: IncomingMessage): boolean {
 
 export function createApi(options: ApiOptions): (req: IncomingMessage, res: ServerResponse, next: Next) => void {
   fs.mkdirSync(path.join(options.cacheDir, 'media'), { recursive: true });
+  fs.mkdirSync(options.dataDir, { recursive: true });
+  const memoryFile = path.join(options.dataDir, 'memory.md');
+  const conversationFile = path.join(options.dataDir, 'conversation.json');
   const searchFile = path.join(options.cacheDir, 'klipy-searches.json');
   const klipy = options.klipyKey
     ? new KlipyClient({
@@ -63,12 +70,7 @@ export function createApi(options: ApiOptions): (req: IncomingMessage, res: Serv
               return null; // a damaged cache is simply started afresh
             }
           },
-          save: (data) => {
-            // Written to a temporary file then renamed, so a crash mid-write cannot leave a damaged cache.
-            const temp = `${searchFile}.${process.pid}.tmp`;
-            fs.writeFileSync(temp, JSON.stringify(data));
-            fs.renameSync(temp, searchFile);
-          },
+          save: (data) => writeFileSafely(searchFile, JSON.stringify(data)),
         },
       })
     : null;
@@ -90,8 +92,40 @@ export function createApi(options: ApiOptions): (req: IncomingMessage, res: Serv
 
   async function handle(url: URL, req: IncomingMessage, res: ServerResponse): Promise<void> {
     if (url.pathname === '/api/status') {
-      sendJson(res, 200, { model: !!options.openRouterKey, gifs: !!klipy, gifsLeft: klipy?.remaining ?? 0, home: options.home ?? null, voice: options.voice ?? false });
+      sendJson(res, 200, { model: !!options.openRouterKey, gifs: !!klipy, gifsLeft: klipy?.remaining ?? 0, voice: options.voice ?? false });
       return;
+    }
+    if (url.pathname === '/api/memory') {
+      if (req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(fs.existsSync(memoryFile) ? fs.readFileSync(memoryFile, 'utf8') : '');
+        return;
+      }
+      if (req.method === 'PUT') {
+        writeFileSafely(memoryFile, await readBody(req, MAX_NOTES));
+        return sendJson(res, 200, { saved: true });
+      }
+    }
+    if (url.pathname === '/api/conversation') {
+      if (req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(fs.existsSync(conversationFile) ? fs.readFileSync(conversationFile, 'utf8') : 'null');
+        return;
+      }
+      if (req.method === 'PUT') {
+        let conversation: unknown;
+        try {
+          conversation = JSON.parse(await readBody(req, MAX_CONVERSATION));
+        } catch {
+          return sendJson(res, 400, { error: 'The conversation was not valid JSON' });
+        }
+        const c = conversation as { messages?: unknown; lastTalkMs?: unknown } | null;
+        if (!c || !Array.isArray(c.messages) || !(c.lastTalkMs === null || typeof c.lastTalkMs === 'number')) {
+          return sendJson(res, 400, { error: 'Expected { messages: [...], lastTalkMs }' });
+        }
+        writeFileSafely(conversationFile, JSON.stringify(c, null, 1));
+        return sendJson(res, 200, { saved: true });
+      }
     }
     if (url.pathname === '/api/openrouter/chat/completions' && req.method === 'POST') {
       if (!options.openRouterKey) return sendJson(res, 503, { error: 'OPENROUTER_API_KEY is not set in .env' });
@@ -182,13 +216,20 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-function readBody(req: IncomingMessage): Promise<string> {
+/** Written to a temporary file then renamed, so a crash mid-write cannot leave a damaged file. */
+function writeFileSafely(file: string, text: string): void {
+  const temp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(temp, text);
+  fs.renameSync(temp, file);
+}
+
+function readBody(req: IncomingMessage, limit = MAX_BODY): Promise<string> {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
-      if (size > MAX_BODY) {
+      if (size > limit) {
         reject(new Error('Request too large'));
         req.destroy();
       } else chunks.push(chunk);

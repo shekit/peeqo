@@ -7,7 +7,13 @@ import type { ChatModel, ChatReply, ChatRequest, ToolCall } from './openrouter.t
  * for expressions and GIFs, plus the words to say). When Peeqo does not talk, the words are a short caption; when it
  * answers in GIFs (the respond tool requires one), every answer has a GIF too.
  */
-type Lines = readonly string[] | ((context: { heard: string; time: string | null }) => string);
+/** What a rule's answer can use: the words heard, the time, and what Peeqo remembers about them. */
+interface ScriptContext {
+  readonly heard: string;
+  readonly time: string | null;
+  readonly facts: readonly string[];
+}
+type Lines = readonly string[] | ((context: ScriptContext) => string);
 
 export interface ScriptRule {
   readonly match: RegExp;
@@ -22,7 +28,7 @@ export interface ScriptRule {
   /** Not talking, the caption instead (at most six words; default: the first sentence of `say`). */
   readonly caption?: Lines;
   /** A tool to use first, when it is offered: its name and arguments, from the words heard (null: none fits). */
-  readonly tool?: (heard: string) => { readonly name: string; readonly args: Record<string, unknown> } | null;
+  readonly tool?: (heard: string, context: ScriptContext) => { readonly name: string; readonly args: Record<string, unknown> } | null;
   /** What to say once that tool has answered. */
   readonly after?: (result: string) => string;
   /** Not talking, the caption (default: `after`); answering in GIFs, the GIF (default: as above): once the tool has answered. */
@@ -57,6 +63,29 @@ export const EXPRESSION_GIFS: Readonly<Record<ExpressionName, string>> = {
   wonder: 'mind blown',
 };
 
+/** A remembered fact matching `pattern`, and its first captured part ("Lives in (.+)" → the place). */
+function recall(facts: readonly string[], pattern: RegExp): string | null {
+  for (const fact of facts) {
+    const m = pattern.exec(fact);
+    if (m) return (m[1] ?? m[0]).replace(/[.!]+$/, '').trim();
+  }
+  return null;
+}
+const LIVES_IN = /^Lives in (.+)$/i;
+const NAME_IS = /^Their name is (.+)$/i;
+
+/** "my sister is Priya" → "Their sister is Priya" (good enough for the stand-in). */
+function aboutThem(text: string): string {
+  const swapped = text
+    .replace(/\bI am\b|\bI'm\b/gi, 'they are')
+    .replace(/\bI\b/g, 'they')
+    .replace(/\bmy\b/gi, 'their')
+    .replace(/\bme\b/gi, 'them')
+    .replace(/[.!?]+$/, '')
+    .trim();
+  return `${swapped.charAt(0).toUpperCase()}${swapped.slice(1)}.`;
+}
+
 /** The weather report's place and conditions now, for a caption and a GIF. */
 function weatherNow(result: string): { place: string; now: string } {
   const [place, rest] = result.split('. Now: ');
@@ -88,6 +117,93 @@ function solve(heard: string): string | null {
 
 /** Peeqo's scripted answers, most specific first; the last rule catches everything else. */
 export const PEEQO_SCRIPT: readonly ScriptRule[] = [
+  {
+    match: /\bforget (everything|all|that|about|my|where|what)\b/i,
+    express: ['yes'],
+    tool: (heard, { facts }) => {
+      if (/\bforget (everything|all)\b/i.test(heard)) return { name: 'forget', args: { all: true } };
+      if (/\bwhere i live\b/i.test(heard)) return { name: 'forget', args: { fact: facts.find((f) => LIVES_IN.test(f)) ?? 'lives in' } };
+      if (/\bmy name\b/i.test(heard)) return { name: 'forget', args: { fact: facts.find((f) => NAME_IS.test(f)) ?? 'name is' } };
+      const what = /\bforget (?:that |about )?(.+)$/i.exec(heard.replace(/[.!?]+$/, ''))?.[1];
+      return what ? { name: 'forget', args: { fact: aboutThem(what).replace(/\.$/, '') } } : null;
+    },
+    after: (result) => (result.startsWith('forgot') ? 'Done, forgotten.' : "I didn't remember that anyway."),
+    say: ["I can't forget things without my memory."],
+    reaction: 'forgetting',
+    caption: ['No memory here!'],
+  },
+  {
+    match: /\b(?:my name is|call me)\s+[\p{L}][\p{L}'-]*/iu,
+    express: ['hello', 'happy'],
+    tool: (heard, { facts }) => {
+      const name = /\b(?:my name is|call me)\s+([\p{L}][\p{L}'-]*)/iu.exec(heard)?.[1];
+      if (!name) return null;
+      const proper = `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
+      const old = facts.find((f) => NAME_IS.test(f));
+      return { name: 'remember', args: { fact: `Their name is ${proper}.`, ...(old ? { replaces: old } : {}) } };
+    },
+    after: (result) => `Nice to meet you, ${[...result.matchAll(/name is ([^".]+)/g)].at(-1)?.[1] ?? 'friend'}!`, // (an update names the old one first)
+    say: ['Nice to meet you!'],
+    reaction: 'nice to meet you',
+  },
+  {
+    match: /\bi (?:live|am living|moved|have moved) (?:in|to) [A-Za-z]/i,
+    express: ['excited'],
+    tool: (heard, { facts }) => {
+      const place = /\bi (?:live|am living|moved|have moved) (?:in|to) ([A-Za-z][A-Za-z .,'-]*?)(?:\s+now)?[.!?]*$/i.exec(heard)?.[1];
+      if (!place) return null;
+      const old = facts.find((f) => LIVES_IN.test(f));
+      return { name: 'remember', args: { fact: `Lives in ${place}.`, ...(old ? { replaces: old } : {}) } };
+    },
+    after: (result) => `${[...result.matchAll(/Lives in ([^".]+)/g)].at(-1)?.[1] ?? 'There'}! Noted.`,
+    say: ['Ooh, nice place!'],
+    reaction: 'home sweet home',
+  },
+  {
+    match: /^(?!.*\b(do|did) you remember\b).*\bremember (?:that )?\S/i,
+    express: ['yes'],
+    tool: (heard) => {
+      const what = /\bremember (?:that )?(.+)$/i.exec(heard)?.[1];
+      return what ? { name: 'remember', args: { fact: aboutThem(what) } } : null;
+    },
+    after: (result) => (result.startsWith('error') ? "Hmm, I couldn't remember that." : "Got it, I'll remember!"),
+    say: ["I'd love to remember that, but I have no memory right now."],
+    reaction: 'noted',
+    caption: ['No memory here!'],
+  },
+  {
+    match: /\bwhat(?:'s| is) my name\b|\bwho am i\b/i,
+    express: ['thinking', 'happy'],
+    say: ({ facts }) => {
+      const name = recall(facts, NAME_IS);
+      return name ? `You're ${name}! I'd never forget.` : "You haven't told me yet! What should I call you?";
+    },
+    reaction: 'hello friend',
+    caption: ({ facts }) => {
+      const name = recall(facts, NAME_IS);
+      return name ? `You're ${name}!` : "You haven't told me!";
+    },
+  },
+  {
+    match: /\bwhere do i live\b/i,
+    express: ['thinking'],
+    say: ({ facts }) => {
+      const place = recall(facts, LIVES_IN);
+      return place ? `In ${place}! I remember.` : "You haven't told me where you live yet.";
+    },
+    reaction: 'home',
+    caption: ({ facts }) => {
+      const place = recall(facts, LIVES_IN);
+      return place ? `In ${place}!` : "You haven't told me!";
+    },
+  },
+  {
+    match: /\bwhat do you (?:know|remember) about me\b/i,
+    express: ['thinking', 'happy'],
+    say: ({ facts }) => (facts.length > 0 ? `I remember ${facts.length} things about you. Like this: ${facts[0]}` : 'Nothing yet! Tell me about yourself.'),
+    reaction: 'i know',
+    caption: ({ facts }) => (facts.length > 0 ? `${facts.length} things. Like: ${facts[0]}` : 'Nothing yet!'),
+  },
   {
     match: /\bcancel\b.*\b(timers?|reminders?|alarms?)\b/i,
     express: ['yes'],
@@ -140,8 +256,8 @@ export const PEEQO_SCRIPT: readonly ScriptRule[] = [
   {
     match: /\b(weather|forecast|temperature|raining|sunny|cold outside|hot outside)\b/i,
     express: ['curious'],
-    tool: (heard) => {
-      const place = /\b(?:in|for|at) ([A-Za-z][A-Za-z .,'-]*?)(?:\s+(?:today|tomorrow|now|right now|this week))?[?.!]*$/i.exec(heard)?.[1];
+    tool: (heard, { facts }) => {
+      const place = /\b(?:in|for|at) ([A-Za-z][A-Za-z .,'-]*?)(?:\s+(?:today|tomorrow|now|right now|this week))?[?.!]*$/i.exec(heard)?.[1] ?? recall(facts, LIVES_IN);
       return { name: 'get_weather', args: place ? { place } : {} };
     },
     after: (result) => {
@@ -268,10 +384,12 @@ export class ScriptedModel implements ChatModel {
         ? { message: { role: 'assistant', content: null, tool_calls: [this.#call('respond', { expressions: ['confused'], heard: '', say, ...(inGifs ? { gif: 'confused' } : {}) })] }, finishReason: 'tool_calls' }
         : { message: { role: 'assistant', content: say }, finishReason: 'stop' };
     }
+    // Tidying memory is the real model's job; the stand-in keeps nothing from it.
+    if (tools.has('remember') && !tools.has('respond')) return { message: { role: 'assistant', content: '' }, finishReason: 'stop' };
     const system = messages.find((m) => m.role === 'system')?.content ?? '';
     const time = /^It is (.+)\.$/m.exec(typeof system === 'string' ? system : '')?.[1] ?? null; // the persona's last line
     const rule = this.#rules.find((r) => r.match.test(heard)) ?? this.#rules[this.#rules.length - 1]!;
-    const context = { heard, time: time ? clockOf(time) : null };
+    const context: ScriptContext = { heard, time: time ? clockOf(time) : null, facts: factsIn(typeof system === 'string' ? system : '') };
     const pick = (lines: Lines) => (typeof lines === 'function' ? lines(context) : lines[Math.floor(this.#random() * lines.length)]!);
     const text = captions && rule.caption ? pick(rule.caption) : pick(rule.say);
     // A caption without one written for it: the first sentence of what it would say.
@@ -287,7 +405,7 @@ export class ScriptedModel implements ChatModel {
         ? { message: { role: 'assistant', content: null, tool_calls: [this.#call('respond', args)] }, finishReason: 'tool_calls' }
         : { message: { role: 'assistant', content: words }, finishReason: 'stop' };
     }
-    const use = rule.tool?.(heard);
+    const use = rule.tool?.(heard, context);
     if (use && tools.has(use.name)) return { message: { role: 'assistant', content: null, tool_calls: [this.#call(use.name, use.args)] }, finishReason: 'tool_calls' };
     if (tools.has('respond')) {
       const args = { expressions: rule.express, say, ...(inGifs ? { gif } : rule.gif && offersGifs ? { gif: rule.gif } : {}) };
@@ -303,6 +421,18 @@ export class ScriptedModel implements ChatModel {
     this.#calls++;
     return { id: `call_${this.#calls}`, type: 'function', function: { name, arguments: JSON.stringify(args) } };
   }
+}
+
+/** The facts listed in the persona's "What you remember about them:" section. */
+function factsIn(system: string): string[] {
+  const start = system.indexOf('What you remember about them:\n');
+  if (start < 0) return [];
+  const facts: string[] = [];
+  for (const line of system.slice(start).split('\n').slice(1)) {
+    if (!line.startsWith('- ')) break;
+    facts.push(line.slice(2));
+  }
+  return facts;
 }
 
 /** "Friday, October 3, 9:41 PM" → "9:41 PM". */

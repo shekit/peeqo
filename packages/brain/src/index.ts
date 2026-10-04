@@ -6,3 +6,4 @@ export * from './scripted.ts';
 export * from './alarms.ts';
 export * from './weather.ts';
 export * from './tools.ts';
+export * from './memory.ts';

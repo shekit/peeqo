@@ -374,7 +374,7 @@ describe('Brain', () => {
 
   it('remembers only the last few exchanges, cutting at a turn', async () => {
     const { body } = fakeBody();
-    const brain = new Brain({ model: new ScriptedModel({ random: () => 0 }), body, memory: 2 });
+    const brain = new Brain({ model: new ScriptedModel({ random: () => 0 }), body, recentTurns: 2 });
     for (const text of ['hello', 'tell me a joke', 'thanks', 'bye']) await brain.hear(text);
     const users = brain.history.filter((m) => m.role === 'user').map((m) => m.content);
     expect(users).toEqual(['thanks', 'bye']);

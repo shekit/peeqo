@@ -10,6 +10,10 @@ export interface TalkCallbacks {
   onWakeWord(on: boolean): void;
   onVoice(on: boolean): void;
   onBrain(mode: BrainMode): void;
+  /** Start the conversation afresh (Peeqo keeps what it remembers). */
+  onClearChat(): void;
+  /** Peeqo forgets everything it remembers about you. */
+  onForgetAll(): void;
 }
 
 export interface TalkPanel {
@@ -20,6 +24,8 @@ export interface TalkPanel {
   setMic(state: 'idle' | 'listening' | 'unsupported'): void;
   /** Whether the wake word can be used (the dev server's voice channel is set up). */
   setWakeWord(available: boolean): void;
+  /** What Peeqo remembers about you. */
+  setMemory(facts: readonly string[]): void;
 }
 
 const MAX_LINES = 40;
@@ -41,6 +47,20 @@ export function createTalkPanel(host: HTMLElement, callbacks: TalkCallbacks): Ta
     el('option', { value: 'live', text: 'live brain (OpenRouter)', disabled: true }),
   );
   const status = el('p', { class: 'muted small talk-status', text: 'Offline brain: scripted answers, no network.' });
+  const memorySummary = el('summary', { text: 'What Peeqo remembers (0)' });
+  const memoryList = el('ul');
+  const clearChat = el('button', { type: 'button', text: 'Clear chat', title: 'Start the conversation afresh; Peeqo keeps what it remembers' });
+  const forgetAll = el('button', { type: 'button', text: 'Forget everything', title: 'Peeqo forgets everything it remembers about you' });
+  clearChat.addEventListener('click', () => callbacks.onClearChat());
+  forgetAll.addEventListener('click', () => callbacks.onForgetAll());
+  const memory = el(
+    'details',
+    { class: 'memory' },
+    memorySummary,
+    memoryList,
+    el('p', { class: 'muted small', text: 'Kept in apps/sim/.data/memory.md (with npm run sim). Tell Peeqo things about you, or ask it to forget them.' }),
+    el('div', { class: 'row' }, clearChat, forgetAll),
+  );
 
   const submit = () => {
     const text = input.value.trim();
@@ -65,6 +85,7 @@ export function createTalkPanel(host: HTMLElement, callbacks: TalkCallbacks): Ta
       el('div', { class: 'talk-row' }, input, send, mic),
       el('div', { class: 'row talk-options' }, el('label', { class: 'check', title: 'Off: Peeqo answers with GIFs and captions, as it always has' }, voice, ' Speak aloud'), wakeLabel, brain),
       status,
+      memory,
     ),
   );
 
@@ -86,6 +107,10 @@ export function createTalkPanel(host: HTMLElement, callbacks: TalkCallbacks): Ta
     setWakeWord(available) {
       wake.disabled = !available;
       wakeLabel.title = available ? 'Keep the microphone open and listen for "hey jarvis"' : 'Needs npm run sim and npm run setup -w @peeqo/wakeword';
+    },
+    setMemory(facts) {
+      memorySummary.textContent = `What Peeqo remembers (${facts.length})`;
+      memoryList.replaceChildren(...(facts.length > 0 ? facts.map((fact) => el('li', { text: fact })) : [el('li', { class: 'muted', text: 'Nothing yet.' })]));
     },
     setMic(state) {
       mic.disabled = state === 'unsupported';

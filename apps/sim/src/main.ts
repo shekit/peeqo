@@ -29,9 +29,10 @@ import {
 } from '@peeqo/core';
 import { CHARACTER_STATES, Character, EXPRESSION_NAMES, Life, expressionSpec, isCharacterState, isExpressionName } from '@peeqo/character';
 import { CLASSIC_GLASSES_CYCLE, ClassicFace, EMOTIONS, ExpressiveFace, FACE_HEIGHT, FACE_WIDTH, isEmotion } from '@peeqo/face';
-import { Alarms, Brain, KlipyClient, OpenRouterModel, ScriptedModel, Weather, alarmTools, clockTool, weatherTool, type Alarm } from '@peeqo/brain';
+import { Alarms, Brain, KlipyClient, Memory, OpenRouterModel, ScriptedModel, Weather, alarmTools, clockTool, weatherTool, type Alarm, type ChatMessage } from '@peeqo/brain';
 import { WebSoundPlayer } from './audio/webSound.ts';
 import { SimBody } from './brain/simBody.ts';
+import { createStores } from './brain/stores.ts';
 import { VoiceInput } from './brain/voiceInput.ts';
 import { createTalkPanel } from './ui/talk.ts';
 import { GLASSES_URLS, LEGACY_REACTIONS, LEGACY_TRACKS, SOUND_URLS } from './content.ts';
@@ -273,10 +274,19 @@ async function main(): Promise<void> {
     },
   });
   const weather = new Weather();
+  // What Peeqo remembers about you, and the recent conversation: files kept by the dev server (apps/sim/.data/).
+  const stores = createStores();
+  const memory = new Memory({
+    store: stores.notes,
+    onChange: (facts) => talk.setMemory(facts),
+    onError: (error) => talk.addLine('note', `Memory could not be saved: ${error instanceof Error ? error.message : String(error)}`),
+  });
   // Peeqo answers with GIFs and captions, as it always has; the voice (Speak aloud) is optional.
   const brain = new Brain({
     model: offline,
     body,
+    memory,
+    conversation: stores.conversation,
     tools: [clockTool, ...alarmTools(alarms), weatherTool(weather)],
     onEvent: (event) => {
       if (event.type === 'heard') talk.setStatus(`${brain.modelName}: thinking…`);
@@ -343,12 +353,29 @@ async function main(): Promise<void> {
       brain.useModel(mode === 'live' && live ? live : offline);
       talk.setStatus(mode === 'live' && live ? `Live brain: ${live.name} through OpenRouter.` : 'Offline brain: scripted answers, no network.');
     },
+    onClearChat: () => {
+      body.hush();
+      brain.reset();
+      talk.addLine('note', 'Chat cleared. Peeqo still remembers what it knows about you.');
+    },
+    onForgetAll: () => {
+      memory.forget(null, true);
+      talk.addLine('note', 'Peeqo forgot everything it remembered about you.');
+    },
   });
+  // Carry on from last time: what Peeqo remembers, and the recent conversation.
+  talk.setMemory(memory.facts);
+  const restored = brain
+    .restore()
+    .then(() => {
+      for (const line of transcriptLines(brain.history)) talk.addLine(line.who, line.text);
+      if (brain.history.length > 0) talk.addLine('note', 'Carrying on from last time.');
+    })
+    .catch((error: unknown) => talk.addLine('note', `Memory could not be loaded: ${error instanceof Error ? error.message : String(error)}`));
   // What the local API offers (it only exists under the dev server, npm run sim).
   void fetch('/api/status')
-    .then((r) => (r.ok ? (r.json() as Promise<{ model: boolean; gifs: boolean; gifsLeft: number; home: string | null; voice: boolean }>) : null))
+    .then((r) => (r.ok ? (r.json() as Promise<{ model: boolean; gifs: boolean; gifsLeft: number; voice: boolean }>) : null))
     .then((status) => {
-      weather.home = status?.home ?? null;
       talk.setWakeWord(status?.voice ?? false);
       if (status?.model) {
         live = new OpenRouterModel({ baseUrl: '/api/openrouter' });
@@ -421,6 +448,10 @@ async function main(): Promise<void> {
     express,
     setCharacterState,
     timers: () => alarms.list().map((a) => ({ id: a.id, kind: a.kind, label: a.label, inMs: a.dueMs - Date.now() })),
+    memory: () => [...memory.facts],
+    conversation: () => brain.history.length,
+    restored: () => restored,
+    saved: () => brain.flush(),
     talk: async (text: string) => {
       const turn = await hear(text);
       return { reply: turn.reply, expressions: turn.expressions, gif: turn.gif?.id ?? null, error: turn.error, interrupted: turn.interrupted };
@@ -508,3 +539,23 @@ main().catch((error: unknown) => {
     loading.textContent = `The simulator failed to start:\n${error instanceof Error ? error.message : String(error)}`;
   }
 });
+
+/** The lines of a saved conversation, for the transcript: what was said, and Peeqo's replies. */
+function transcriptLines(messages: readonly ChatMessage[]): { who: 'you' | 'peeqo'; text: string }[] {
+  const lines: { who: 'you' | 'peeqo'; text: string }[] = [];
+  for (const m of messages) {
+    if (m.role === 'user' && typeof m.content === 'string') lines.push({ who: 'you', text: m.content });
+    if (m.role !== 'assistant') continue;
+    if (m.content) lines.push({ who: 'peeqo', text: m.content });
+    for (const call of m.tool_calls ?? []) {
+      if (call.function.name !== 'respond') continue;
+      try {
+        const say = (JSON.parse(call.function.arguments) as { say?: unknown }).say;
+        if (typeof say === 'string' && say.trim()) lines.push({ who: 'peeqo', text: say.trim() });
+      } catch {
+        // skip it
+      }
+    }
+  }
+  return lines;
+}

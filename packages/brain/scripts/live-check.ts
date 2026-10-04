@@ -1,6 +1,6 @@
-// Talks to the real model (and Klipy, and Open-Meteo) for a few turns, printing what Peeqo would do. Uses the keys
-// in the repo's .env (OPENROUTER_API_KEY, KLIPY_API; PEEQO_HOME for the weather's home). Costs a few cents and a
-// few GIF searches; run it by hand:
+// Talks to the real model (and Klipy, and Open-Meteo) for a few turns, printing what Peeqo would do and what it
+// remembers. Uses the keys in the repo's .env (OPENROUTER_API_KEY, KLIPY_API). Costs a few cents and a few GIF
+// searches; run it by hand:
 //
 //   node packages/brain/scripts/live-check.ts ["something to say" …]
 //   node packages/brain/scripts/live-check.ts --speak ["something to say" …]   (macOS: says it, sends the recording)
@@ -10,7 +10,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Alarms, Brain, KlipyClient, OpenRouterModel, Weather, alarmTools, clockTool, weatherTool, type BrainBody } from '../src/index.ts';
+import { Alarms, Brain, KlipyClient, Memory, OpenRouterModel, Weather, alarmTools, clockTool, weatherTool, type BrainBody } from '../src/index.ts';
 
 const envPath = fileURLToPath(new URL('../../../.env', import.meta.url));
 const env = Object.fromEntries(
@@ -45,11 +45,13 @@ const body: BrainBody = {
 };
 const alarms = new Alarms({ onDue: (alarm) => console.log(`  [alarm due] ${alarm.label}`) });
 const gifs = env.KLIPY_API ? new KlipyClient({ apiKey: env.KLIPY_API, perHour: 5 }) : null;
+const memory = new Memory(); // just for this run
 const brain = new Brain({
   model: new OpenRouterModel({ apiKey: env.OPENROUTER_API_KEY, ...(env.PEEQO_MODEL ? { model: env.PEEQO_MODEL } : {}) }),
   body,
   gifs,
-  tools: [clockTool, ...alarmTools(alarms), weatherTool(new Weather({ home: env.PEEQO_HOME ?? null }))],
+  memory,
+  tools: [clockTool, ...alarmTools(alarms), weatherTool(new Weather())],
   onEvent: (e) => {
     if (e.type === 'reply') console.log(`  (${e.model}, ${e.ms} ms)`);
     if (e.type === 'tool') console.log(`  [tool ${e.name}] ${e.args} -> ${e.result.slice(0, 160)}`);
@@ -64,3 +66,4 @@ for (const line of turns) {
   if (turn.error) process.exitCode = 1;
 }
 console.log(`history: ${brain.history.map((m) => m.role).join(' ')}; timers: ${alarms.list().map((a) => `${a.id} ${a.label}`).join(', ') || 'none'}`);
+console.log(`remembers: ${memory.facts.map((f) => `"${f}"`).join(', ') || 'nothing'}`);

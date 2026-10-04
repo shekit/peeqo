@@ -84,7 +84,7 @@ export class Weather {
   /** A short report: now, and the next two days. */
   async report(where: string | null, signal?: AbortSignal): Promise<string> {
     const name = where?.trim() || this.home;
-    if (!name) return 'error: no place was named and no home is set; ask where they are';
+    if (!name) return 'error: no place was named; ask where they are';
     const place = await this.find(name, signal);
     if (!place) return `error: could not find a place called "${name.slice(0, 60)}"`;
     const url =

@@ -125,7 +125,7 @@ describe('tools', () => {
         'The day after: clear sky, high 31°C (88°F), low 22°C (72°F), 0% chance of rain or snow.',
     );
     expect(urls[1]).toContain('latitude=18.5&longitude=73.9');
-    expect(await get.run({}, context())).toMatch(/^error: no place was named and no home is set/);
+    expect(await get.run({}, context())).toMatch(/^error: no place was named; ask where they are/);
     weather.home = 'Pune';
     expect(await get.run({}, context())).toMatch(/^Pune, Maharashtra, India\. Now: light rain/);
     expect(await get.run({ place: 'Atlantis' }, context())).toBe('error: could not find a place called "Atlantis"');

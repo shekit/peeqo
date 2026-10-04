@@ -356,3 +356,24 @@ footer {
 .talk-status {
   margin: 6px 0 0;
 }
+
+.memory {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.memory summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.memory ul {
+  margin: 6px 0;
+  padding-left: 18px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.memory li {
+  margin: 2px 0;
+}

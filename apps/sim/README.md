@@ -73,9 +73,19 @@ npm run check:clearance -w @peeqo/sim        # re-measures the real meshes at 50
 - **Tools:** the model can check the time, set, list and cancel timers and reminders, and look up the weather.
   - Timers and reminders are kept in the page (they survive a reload), and Peeqo announces them when due, with a
     GIF.
-  - Weather comes from Open-Meteo (free, no key). Set `PEEQO_HOME` in `.env` (e.g. `Pune, India`) so "what's the
-    weather?" needs no place.
+  - Weather comes from Open-Meteo (free, no key). Ask without naming a place and Peeqo uses where you live, if it
+    remembers.
   - A turn that uses a tool takes two model calls: about 5 to 8 s with speech.
+- **Memory:** Peeqo remembers lasting things you tell it (your name, where you live, the people in your life, what
+  you like, important dates) in `apps/sim/.data/memory.md`, a list you can read and edit.
+  - The model decides what to keep, with its remember and forget tools; it skips small talk. Ask it to forget
+    something, or use **Forget everything** in the panel.
+  - The recent conversation (the last 12 to 16 exchanges) is saved too, in `conversation.json`, so a reload carries on.
+    **Clear chat** starts afresh but keeps the memory.
+  - Older exchanges drop out four at a time, and the model saves anything lasting from them first.
+  - After more than half an hour apart, Peeqo is told how long it has been.
+  - The facts are sent to the model with each message (through OpenRouter) but stored only on this machine.
+    Without the dev server, they're kept in the browser.
 - **GIFs:** come from Klipy.
   - Searches are cached on disk, and an hourly budget of 90 keeps under the key's 100.
   - Media is served from the dev server, so the face can draw it.

@@ -42,9 +42,22 @@ const stubApi = {
   }),
   '/api/gifs/media': () => ({ type: 'video/mp4', body: fs.readFileSync(shrug) }),
 };
+// Memory and conversation, kept here as the dev server keeps them in files.
+const stubFiles = { '/api/memory': { type: 'text/markdown', body: '' }, '/api/conversation': { type: 'application/json', body: 'null' } };
 const server = http
   .createServer((req, res) => {
     const pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+    if (stubFiles[pathname]) {
+      if (req.method === 'PUT') {
+        let data = '';
+        req.on('data', (chunk) => (data += chunk));
+        req.on('end', () => {
+          stubFiles[pathname].body = data;
+          res.writeHead(200, { 'Content-Type': 'application/json' }).end('{"saved":true}');
+        });
+      } else res.writeHead(200, { 'Content-Type': stubFiles[pathname].type }).end(stubFiles[pathname].body);
+      return;
+    }
     if (stubApi[pathname]) {
       const { type, body } = stubApi[pathname]();
       res.writeHead(200, { 'Content-Type': type }).end(body);
@@ -346,6 +359,22 @@ try {
   await hook('react', 'ok');
   s = await waitFor((x) => x.showingMedia, 5000);
   check('2019 reaction "ok" plays its video on the face', !!s);
+
+  // Memory (the offline brain): it remembers your name, and still knows it after a reload, with the chat carried over.
+  await waitFor((x) => !x.showingMedia, 8000);
+  turn = await hook('talk', 'My name is Sam');
+  const facts = await hook('memory');
+  check('memory: remembers a name it is told', turn.reply === 'Nice to meet you, Sam!' && facts.includes('Their name is Sam.'), `${turn.reply} | ${JSON.stringify(facts)}`);
+  await hook('saved');
+  check('memory: kept as Markdown, and the chat saved', stubFiles['/api/memory'].body.includes('\n- Their name is Sam.') && JSON.parse(stubFiles['/api/conversation'].body)?.messages.length > 0);
+  await page.reload();
+  await page.waitForFunction(() => window.__ready === true, null, { timeout: 60000 });
+  await hook('restored');
+  const remembered = await hook('memory');
+  const carried = await hook('conversation');
+  check('memory: still there after a reload, with the chat carried over', remembered.includes('Their name is Sam.') && carried > 0, `${JSON.stringify(remembered)}, ${carried} messages`);
+  turn = await hook('talk', "What's my name?");
+  check('memory: recalls it', turn.reply === "You're Sam!", turn.reply);
 } catch (error) {
   check('run completed', false, error.message);
 }

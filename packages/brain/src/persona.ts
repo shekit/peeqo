@@ -102,6 +102,10 @@ export function respondTool(gifs: boolean, voice = true): ToolSpec {
 
 export interface PersonaContext {
   readonly now: Date;
+  /** What it remembers about its person (undefined: it has no memory, and no remember tool). */
+  readonly memory?: readonly string[];
+  /** When they last talked, if it was a while ago (so Peeqo knows the conversation picks up after a gap). */
+  readonly lastTalk?: Date | null;
   /** What else the model can do (the time, timers, reminders, weather): shown so it knows to use them. */
   readonly tools?: readonly string[];
   /** Things that just happened (timers going off), so a reply to them makes sense. */
@@ -143,8 +147,45 @@ export function systemPrompt(context: PersonaContext): string {
       : null,
     '- Sometimes you hear them speak (an audio clip) instead of typed words: listen, write what they said in heard, and answer that. If it is only noise or you cannot make it out, say so cheerfully.',
     '- If asked: you are a robot running on an AI model, designed and built by your person.',
+    ...(context.memory
+      ? [
+          '- When they tell you something lasting about themselves (their name, people in their life, where they live, what they like, ' +
+            'important dates, ongoing projects), save it with remember, alongside your respond. If it changes something you already remember, ' +
+            'replace that fact rather than adding another. Never save small talk, passing moods or one-off questions. If they ask you to forget ' +
+            'something, use forget. Use what you remember naturally, without reciting it.',
+          context.memory.length > 0
+            ? `What you remember about them:\n${context.memory.map((fact) => `- ${fact}`).join('\n')}`
+            : 'You do not know anything about them yet.',
+        ]
+      : []),
+    context.lastTalk ? `You last talked ${since(context.lastTalk, context.now)}; this conversation picks up after that gap.` : null,
     context.recent && context.recent.length > 0 ? `Just now: ${context.recent.join('; ')}.` : null,
     `It is ${when}.`,
   ];
   return lines.filter((line): line is string => line !== null).join('\n');
+}
+
+/** "3 hours ago (at 6:12 PM)", "2 days ago (on Thursday, October 1)". */
+function since(then: Date, now: Date): string {
+  const minutes = Math.max(0, Math.round((now.getTime() - then.getTime()) / 60_000));
+  const ago = minutes < 90 ? `${minutes} minutes` : minutes < 36 * 60 ? `${Math.round(minutes / 60)} hours` : `${Math.round(minutes / 1440)} days`;
+  const sameDay = then.toDateString() === now.toDateString();
+  const at = sameDay
+    ? `at ${then.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+    : `on ${then.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`;
+  return `${ago} ago (${at})`;
+}
+
+/**
+ * Instructions for tidying memory: older exchanges are about to drop out of the conversation the model sees, so
+ * anything lasting in them is saved first.
+ */
+export function tidyPrompt(): string {
+  return [
+    'You are the memory of Peeqo, a small desk robot. The person it lives with talked to it earlier; that part of the conversation is about to be forgotten.',
+    'Save anything lasting about them that is not already remembered (their name, people in their life, where they live, what they like, ' +
+      'important dates, ongoing projects) with remember, as short sentences. Update facts that changed (remember with replaces), and forget ' +
+      'ones that are no longer true. Ignore small talk, passing moods, one-off questions and anything about Peeqo itself. If there is nothing ' +
+      'to save, call nothing.',
+  ].join('\n');
 }

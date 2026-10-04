@@ -18,7 +18,7 @@ npm run verify:sim                   # drives the built simulator in Chrome
 | `packages/core` | Neck kinematics, the safety governor, CAD collision tables, head animation, LED patterns. No DOM or Node APIs. |
 | `packages/face` | The screen face: expressive eyes (and the 2019 eyes), drawn on a canvas. |
 | `packages/character` | Peeqo as a character: states, expressions, synthesized sounds, and its life between conversations. |
-| `packages/brain` | The mind: OpenRouter model, Klipy GIFs, persona, conversation loop, tools (time, timers, reminders, weather), and an offline stand-in. Peeqo answers with GIFs and captions; a voice is optional. |
+| `packages/brain` | The mind: OpenRouter model, Klipy GIFs, persona, conversation loop, memory (`memory.md`, kept by the model), tools (time, timers, reminders, weather), and an offline stand-in. Peeqo answers with GIFs and captions; a voice is optional. |
 | `packages/wakeword` | Wake word and speech detection: openWakeWord in a Python helper process that Node feeds audio to. |
 | `apps/sim` | The browser simulator, and the local API that holds the keys. See [its README](../apps/sim/README.md). |
 

@@ -11,8 +11,9 @@ coverage/
 .env.*
 !.env.example
 
-# simulator caches (GIF searches and media)
+# simulator caches (GIF searches and media), and Peeqo's memory and conversation (personal)
 apps/sim/.cache/
+apps/sim/.data/
 
 # Python environment for the wake word detector
 packages/wakeword/.venv/

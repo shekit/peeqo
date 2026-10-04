@@ -7,15 +7,15 @@ import { attachVoice } from './server/voice.ts';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 
-/** The local API (model, GIFs) for the dev and preview servers; keys stay in this Node process. */
+/** The local API (model, GIFs, memory) for the dev and preview servers; keys stay in this Node process. */
 function peeqoApi(mode: string): Plugin {
   const env = loadEnv(mode, repoRoot, ''); // the repo's .env; nothing here is exposed to the page
   const api = createApi({
     openRouterKey: env.OPENROUTER_API_KEY,
     klipyKey: env.KLIPY_API,
-    home: env.PEEQO_HOME,
     voice: wakeWordReady(),
     cacheDir: path.join(repoRoot, 'apps/sim/.cache'),
+    dataDir: path.join(repoRoot, 'apps/sim/.data'),
   });
   const words = env.PEEQO_WAKE_WORDS ? env.PEEQO_WAKE_WORDS.split(',').map((w) => w.trim()) : undefined;
   return {

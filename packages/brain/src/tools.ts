@@ -1,4 +1,5 @@
 import { describeDuration, type Alarm, type Alarms } from './alarms.ts';
+import type { Memory } from './memory.ts';
 import type { ToolSpec } from './openrouter.ts';
 import type { Weather } from './weather.ts';
 
@@ -128,9 +129,11 @@ export function alarmTools(alarms: Alarms): BrainTool[] {
 export function weatherTool(weather: Weather): BrainTool {
   return {
     ability: 'look up the weather',
-    spec: spec('get_weather', "The weather now and for the next two days, for a place or (if none is named) home. Units are given in both °C and °F.", {
-      place: { type: 'string', description: 'A town or city, optionally with its country, e.g. "Pune, India". Leave out for home.' },
-    }),
+    spec: spec(
+      'get_weather',
+      "The weather now and for the next two days, in both °C and °F. If they don't name a place, use where they live, if you remember it.",
+      { place: { type: 'string', description: 'A town or city, optionally with its country, e.g. "Pune, India".' } },
+    ),
     run: async (args, { signal }) => {
       try {
         return await weather.report(typeof args.place === 'string' ? args.place : null, signal);
@@ -140,4 +143,30 @@ export function weatherTool(weather: Weather): BrainTool {
       }
     },
   };
+}
+
+/** Remembering and forgetting facts about the person, kept by a Memory (Brain adds these when it has one). */
+export function memoryTools(memory: Memory): BrainTool[] {
+  return [
+    {
+      spec: spec(
+        'remember',
+        'Save a lasting fact about the person you live with, as a short sentence (e.g. "Lives in Pune, India.", "Has a sister called Priya.", ' +
+          '"Exam on 10 October 2026."). To update something you already remember, give that fact in replaces.',
+        {
+          fact: { type: 'string', maxLength: 200 },
+          replaces: { type: 'string', description: 'The fact this one updates, as you remember it (optional)' },
+        },
+        ['fact'],
+      ),
+      run: (args) => memory.remember(typeof args.fact === 'string' ? args.fact : '', typeof args.replaces === 'string' ? args.replaces : undefined),
+    },
+    {
+      spec: spec('forget', 'Forget a fact, when they ask you to or it is no longer true; or everything you remember about them, if they ask.', {
+        fact: { type: 'string', description: 'The fact to forget, as you remember it' },
+        all: { type: 'boolean', description: 'Forget everything' },
+      }),
+      run: (args) => memory.forget(typeof args.fact === 'string' ? args.fact : null, args.all === true),
+    },
+  ];
 }
