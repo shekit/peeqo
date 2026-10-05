@@ -20,6 +20,8 @@ export interface WakeWordOptions {
   readonly patience?: number;
   /** Python to run (default: the environment made by `npm run setup -w @peeqo/wakeword`). */
   readonly python?: string;
+  /** The detector script (default: python/detector.py in this package; the robot keeps its own copy). */
+  readonly script?: string;
 }
 
 /** Audio the detector expects: 16 kHz, mono, 16-bit. */
@@ -59,7 +61,7 @@ export class WakeWordDetector {
     if (!existsSync(python)) {
       return Promise.reject(new Error('The wake word detector is not set up: run `npm run setup -w @peeqo/wakeword`'));
     }
-    const args = [SCRIPT];
+    const args = [this.#options.script ?? SCRIPT];
     for (const word of this.#options.words ?? ['hey_jarvis']) args.push('--word', word);
     args.push('--threshold', String(this.#options.threshold ?? 0.5), '--patience', String(this.#options.patience ?? 3));
     const child = spawn(python, args, { stdio: ['pipe', 'pipe', 'pipe'] });

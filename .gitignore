@@ -15,5 +15,9 @@ coverage/
 apps/sim/.cache/
 apps/sim/.data/
 
-# Python environment for the wake word detector
+# Python environment for the wake word detector, and Python's caches
 packages/wakeword/.venv/
+__pycache__/
+
+# the robot service's data when run on a laptop (npm run dev -w @peeqo/robot), and its built pages
+apps/robot/.data/

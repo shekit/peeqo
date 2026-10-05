@@ -1,0 +1,21 @@
+{
+  "name": "@peeqo/robot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Peeqo on the robot: the service that runs its brain, character and safety governor on the Raspberry Pi and drives the real servos, LED ring, screen, microphone and speaker; with the phone setup page and the web panel.",
+  "scripts": {
+    "dev": "node src/main.ts --fake"
+  },
+  "dependencies": {
+    "@peeqo/brain": "*",
+    "@peeqo/character": "*",
+    "@peeqo/core": "*",
+    "@peeqo/face": "*",
+    "@peeqo/wakeword": "*",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2"
+  }
+}
