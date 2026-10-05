@@ -209,6 +209,7 @@ export class Robot {
     });
     this.buttons = new ButtonGestures({
       tap: () => this.listen(),
+      medium: () => this.onShowAddress?.(),
       holding: (_pin, stage) => {
         if (stage === 'shutdown') this.face.setScreen({ title: 'Let go to shut down', lines: ['Keep holding for setup mode (10 s).'], tone: 'warn' });
         else if (stage === null && this.face.screen?.title === 'Let go to shut down') this.face.setScreen(null);
@@ -220,6 +221,8 @@ export class Robot {
 
   /** Called when someone holds a button for setup mode (the network module takes it from there). */
   onSetupRequested: (() => void) | null = null;
+  /** Called when someone asks where to find Peeqo (a medium press). */
+  onShowAddress: (() => void) | null = null;
 
   /** Rebuilds the brain's model and GIF search from the config (after setup or a change of keys). */
   applySettings(): void {

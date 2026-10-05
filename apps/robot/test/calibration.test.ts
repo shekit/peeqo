@@ -119,6 +119,24 @@ describe('the guided calibration', () => {
     expect(session.view().message).toBeNull();
   });
 
+  it('caps the total level correction (more means the arms were not level)', () => {
+    const sent: number[][] = [];
+    const session = new CalibrationSession({ raw: (p) => void sent.push([...p]), neutral: NEUTRAL, save: () => undefined, cancel: () => undefined });
+    session.start();
+    for (const servo of [0, 1, 2] as const) session.identified(servo);
+    for (let s = 0; s < 3; s++) {
+      session.probe();
+      session.plusMoved(false);
+      session.armLevel();
+    }
+    for (let i = 0; i < 12; i++) session.trim({ pitchDeg: 0.25, rollDeg: 0, heaveMm: 0 }); // 3° in all: allowed
+    expect(session.view().message).toBeNull();
+    const before = sent.length;
+    session.trim({ pitchDeg: 0.25, rollDeg: 0, heaveMm: 0 });
+    expect(session.view().message).toMatch(/more correction/);
+    expect(sent.length).toBe(before); // and nothing moved
+  });
+
   it('refuses the same arm twice, warns about arms turning different ways, and cancels cleanly', () => {
     let cancelled = 0;
     const session = new CalibrationSession({ raw: () => undefined, neutral: NEUTRAL, save: () => undefined, cancel: () => void cancelled++ });

@@ -1,0 +1,139 @@
+:root {
+  --bg: #f4f5f7;
+  --card: #fff;
+  --text: #16181d;
+  --muted: #667085;
+  --border: #e3e6eb;
+  --accent: #2563eb;
+  --danger: #b3261e;
+  --ok: #157f3b;
+  color-scheme: light;
+}
+* {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none !important;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+}
+header.top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+header.top h1 {
+  margin: 0;
+  font-size: 22px;
+}
+.grow {
+  flex: 1;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.card h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 13px;
+}
+button {
+  font: inherit;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+  cursor: pointer;
+}
+button:hover:not(:disabled) {
+  border-color: #b9c0cc;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+button.danger {
+  color: var(--danger);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+input[type='text'],
+input[type='password'],
+input[type='number'],
+input:not([type]) {
+  font: inherit;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 0;
+}
+label.field {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #eef1f5;
+  font-size: 13px;
+}
+.chip.ok {
+  background: #e4f4ea;
+  color: var(--ok);
+}
+.chip.warn {
+  background: #fdecea;
+  color: var(--danger);
+}
+.message {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff7e0;
+  margin: 8px 0;
+}
+.message.error {
+  background: #fdecea;
+  color: var(--danger);
+}

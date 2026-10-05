@@ -8,6 +8,8 @@ const TAP_MS = 1000;
 export interface ButtonActions {
   /** A tap: talk to Peeqo (it listens, as after its wake word). */
   tap(pin: number): void;
+  /** A press of 1–3 s: show where to find Peeqo (its address, or how to set it up). */
+  medium(pin: number): void;
   /** Feedback while held: 'shutdown' once letting go would shut down, 'setup' once setup mode has started, null when let go early. */
   holding(pin: number, stage: 'shutdown' | 'setup' | null): void;
   shutdown(): void;
@@ -15,8 +17,8 @@ export interface ButtonActions {
 }
 
 /**
- * The buttons: tap to talk; hold 3 s and let go to shut down (as the 2019 rear button did); keep holding to 10 s for
- * setup mode. A button only counts once it has been seen released, so one stuck down (or wired differently) at
+ * The buttons: tap to talk; press for a second or two to see Peeqo's address; hold 3 s and let go to shut down (as the
+ * 2019 rear button did); keep holding to 10 s for setup mode. A button only counts once it has been seen released, so one stuck down (or wired differently) at
  * start-up cannot shut Peeqo down.
  */
 export class ButtonGestures {
@@ -50,7 +52,7 @@ export class ButtonGestures {
         return;
       }
       if (held < TAP_MS) this.#actions.tap(pin);
-      else this.#actions.holding(pin, null);
+      else this.#actions.medium(pin);
       return;
     }
     if (!this.#armed.has(pin) || this.#pressed.has(pin)) return;

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Peeqo</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #000;
+        overflow: hidden;
+        cursor: none;
+        font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      }
+      body {
+        display: grid;
+        place-items: center;
+      }
+      .stage {
+        position: relative;
+        width: min(100vw, calc(100vh * 800 / 480));
+        aspect-ratio: 800 / 480;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      #screen {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4%;
+        padding: 5%;
+        box-sizing: border-box;
+        background: rgba(255, 255, 255, 0.96);
+        color: #111;
+      }
+      #screen[hidden] {
+        display: none;
+      }
+      #screen[data-tone='warn'] h1 {
+        color: #b3261e;
+      }
+      .screen-text h1 {
+        margin: 0 0 0.4em;
+        font-size: 5.5vmin;
+      }
+      .screen-text p {
+        margin: 0.35em 0;
+        font-size: 3.4vmin;
+        line-height: 1.3;
+      }
+      .screen-qr {
+        flex: 0 0 auto;
+        width: 38%;
+        aspect-ratio: 1;
+      }
+      .screen-qr svg {
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <canvas id="face"></canvas>
+      <div id="screen" hidden></div>
+    </div>
+    <script type="module">
+      import { startFace } from './src/faceView.ts';
+      startFace(document.getElementById('face'), document.getElementById('screen'));
+    </script>
+  </body>
+</html>

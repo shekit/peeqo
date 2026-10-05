@@ -1,0 +1,20 @@
+# Peeqo's service: brain, character, safety governor, servos, LEDs, microphone, web panel. Installed by install.sh
+# (which fills in @USER@ and @DIR@).
+[Unit]
+Description=Peeqo
+After=network.target sound.target
+Wants=network.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@DIR@
+ExecStart=/usr/bin/node @DIR@/apps/robot/src/main.ts
+Restart=always
+RestartSec=2
+# Port 80, for the panel at http://peeqo.local and the setup page.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+SupplementaryGroups=@GROUPS@
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

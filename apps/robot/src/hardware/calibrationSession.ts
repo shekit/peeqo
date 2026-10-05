@@ -69,6 +69,8 @@ export const MAX_DOWN_US = 114;
 export const ARM_RANGE_US = 400;
 /** The tilt check. */
 export const CHECK_TILT_DEG = 3;
+/** The most the level step may correct, in all: more means the arms were not levelled (start over instead). */
+export const MAX_TRIM = { pitchDeg: 3, rollDeg: 3, heaveMm: 1.5 } as const;
 
 export class CalibrationSession {
   readonly #deps: CalibrationDeps;
@@ -80,6 +82,8 @@ export class CalibrationSession {
   #levelUs: (number | null)[] = [null, null, null];
   #pulses: number[] = [REST_US, REST_US, REST_US];
   #working: Calibration | null = null;
+  /** How far the level step has corrected so far. */
+  #trimmed = { pitchDeg: 0, rollDeg: 0, heaveMm: 0 };
   #message: string | null = null;
   #timers: ReturnType<typeof setTimeout>[] = [];
 
@@ -116,6 +120,7 @@ export class CalibrationSession {
     this.#directions = [null, null, null];
     this.#levelUs = [null, null, null];
     this.#working = null;
+    this.#trimmed = { pitchDeg: 0, rollDeg: 0, heaveMm: 0 };
     this.#message = null;
     this.#send([REST_US, REST_US, REST_US]);
   }
@@ -209,6 +214,16 @@ export class CalibrationSession {
       rollDeg: clamp(move.rollDeg, -1, 1),
       heaveMm: clamp(move.heaveMm, -0.5, 0.5),
     };
+    const total = {
+      pitchDeg: this.#trimmed.pitchDeg + limited.pitchDeg,
+      rollDeg: this.#trimmed.rollDeg + limited.rollDeg,
+      heaveMm: this.#trimmed.heaveMm + limited.heaveMm,
+    };
+    if (Math.abs(total.pitchDeg) > MAX_TRIM.pitchDeg || Math.abs(total.rollDeg) > MAX_TRIM.rollDeg || Math.abs(total.heaveMm) > MAX_TRIM.heaveMm) {
+      this.#message = 'That is more correction than levelling should need: the arms were probably not level. Start over and level them again.';
+      return;
+    }
+    this.#trimmed = total;
     this.#working = trimmed(this.#working, this.#deps.neutral, limited);
     this.#step = 'level';
     this.#sendPose(this.#deps.neutral);

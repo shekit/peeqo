@@ -7,6 +7,7 @@ and is developed against a simulator first. The same code will run on the robot.
 npm install                          # once
 npm run setup -w @peeqo/wakeword     # once, for the wake word (Python 3.10 or newer)
 npm run sim                          # the simulator, at http://localhost:5173
+npm run robot                        # the robot's service with fake hardware, at http://localhost:8080
 npm run check                        # typecheck, unit tests, production build
 npm run verify:sim                   # drives the built simulator in Chrome
 ```
@@ -21,6 +22,7 @@ npm run verify:sim                   # drives the built simulator in Chrome
 | `packages/brain` | The mind: OpenRouter model, Klipy GIFs, persona, conversation loop, memory (`memory.md`, kept by the model), tools (time, timers, reminders, weather), and an offline stand-in. Peeqo answers with GIFs and captions; a voice is optional. |
 | `packages/wakeword` | Wake word and speech detection: openWakeWord in a Python helper process that Node feeds audio to. |
 | `apps/sim` | The browser simulator, and the local API that holds the keys. See [its README](../apps/sim/README.md). |
+| `apps/robot` | Peeqo on its Raspberry Pi: the service that drives the real servos, LEDs, screen, mic and buttons, the web panel, phone setup and guided calibration. See [its README](../apps/robot/README.md). |
 
 ## How a moment flows
 
@@ -52,11 +54,19 @@ Every head pose, whether from sliders, animations, the brain or anything later, 
 Every gesture leaves at least 30% of the neck's room to spare. Tests play every gesture and expression through the
 real governor.
 
-## Before the robot moves
+## Bringing up the robot
 
-- **Servo calibration:** find which pulse puts each horn level, and which way each turns. The 2019 pulse
-  mapping does not hold for the dev kit.
-- **Wiring:** confirm which PCA9685 channel drives which servo, and where LED 0 sits.
-- **Real play:** measure backlash and play in the rod ends (the model assumes rigid, perfectly fitted parts).
-- **Robot runtime:** the same `Character` and `Brain`, with drivers for the servos (PCA9685), LEDs (DotStar),
-  screen, speaker and microphone.
+The robot runs `apps/robot`: the same brain, character and governor as the simulator, on the Pi. To get it there:
+
+- **Deploy:** flash Raspberry Pi OS Lite (64-bit) with SSH on, then run `npm run deploy -w @peeqo/robot` from a
+  laptop. The installer sets up everything else.
+- **Wi-Fi:** from a phone. Peeqo shows a QR code for its setup network when it knows no Wi-Fi.
+- **Calibration:** guided, from the panel, with the cloth off. Each arm's channel, direction and level are found by
+  eye, then the head is levelled with a phone level and the scale checked with a 3° tilt. The servos stay limp until
+  this is done. On the robot, the governor keeps every horn between 5° and 55°.
+- **Still to check on the hardware:**
+  - the screen's resolution and rotation;
+  - the audio devices;
+  - where LED 0 sits;
+  - which button is which;
+  - backlash and play in the rod ends (the model assumes rigid, perfectly fitted parts).
