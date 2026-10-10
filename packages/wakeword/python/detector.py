@@ -16,9 +16,18 @@ import json
 import os
 import sys
 
+import types
+
 import numpy as np
-from openwakeword.model import Model
-from openwakeword.vad import VAD
+
+# openwakeword/__init__.py imports its training helper (scikit-learn and scipy) only to export it. Nothing here
+# trains, and leaving them out saves about 90 MB, which matters on a 1 GB Pi 3 B+.
+_stub = types.ModuleType("openwakeword.custom_verifier_model")
+_stub.train_custom_verifier = None
+sys.modules.setdefault("openwakeword.custom_verifier_model", _stub)
+
+from openwakeword.model import Model  # noqa: E402 (after the stub, on purpose)
+from openwakeword.vad import VAD  # noqa: E402
 
 CHUNK = 1280  # samples: 80 ms at 16 kHz, what openWakeWord expects
 

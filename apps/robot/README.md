@@ -11,11 +11,14 @@ the simulator, and drives:
 
 It also serves a web panel to phones and laptops on the same Wi-Fi, and a setup page for joining a new Wi-Fi network.
 
+It runs on the dev kit's Raspberry Pi 3 B+ (1 GB), and on later models.
+
 ## Try it on a laptop
 
 ```sh
 npm run robot                         # fake hardware: http://localhost:8080 (panel), /face (the screen)
 npm run dev -w @peeqo/robot -- --setup   # start as if no Wi-Fi were known, to try the setup page
+npm run verify:robot                  # drives the pages in Chrome: setup, sign-in, talking, calibration, buttons
 ```
 
 Run `npm run build -w @peeqo/robot` first to build the pages. With fake hardware, nothing is driven: the servo board
@@ -71,18 +74,23 @@ about 10 minutes.
 
 1. **Which arm is which:** each channel wiggles its arm by about 1°, and you click the arm that moved.
 2. **Each arm:**
-   - Press + once and say whether the arm went up or down.
-   - Nudge it until it points level. It can't be moved far below where it started, because the arms rest close to
-     their holders.
+   - **Direction:** press + once and say whether the arm went up or down.
+   - **Lowest:** nudge it down, half a degree at a time, until it's just about to touch anything, then mark it.
+   - **Highest:** nudge it up until it's as high as it should go, just short of binding, then mark it.
+   - **Level:** nudge it, within your marks, until it points level.
 3. **Level:** Peeqo rises to its normal height. Put your phone flat on its head with a level app open and tap until
    it reads 0°.
 4. **Check:** Peeqo tilts back 3°. Type what the level reads; this corrects the scale.
+5. **Save:** if Peeqo's normal pose doesn't fit inside the marks, it refuses to save and says which arm is the
+   problem.
 
 Every calibration move is slow and starts from 1500 µs, where the 2019 software always left the servos. The servo
 driver is set up exactly as the 2019 one was, so 1500 µs means the same thing.
 
-After calibration, the motion governor drives the servos. On the robot, it keeps every horn between 5° and 55°,
-leaving room for calibration error.
+After calibration, the motion governor drives the servos, and the marks are hard limits:
+- **The governor plans inside them,** 1.5° in from each mark. On the robot it also keeps every horn between 5° and
+  55°.
+- **The servo driver never sends a pulse outside them.** If anything ever asked it to, it holds still instead.
 
 ## On the robot
 
@@ -96,6 +104,13 @@ leaving room for calibration error.
   - `peeqo` runs the service on port 80;
   - `peeqo-face` runs Chromium full screen on the display, showing `/face`.
   - Logs: `journalctl -u peeqo -f`.
+- **The 3 B+'s 1 GB:**
+  - The face draws at 30 frames a second.
+  - Chromium runs in its low-memory mode.
+  - The installer adds compressed swap if there's none.
+  - The wake word detector leaves out openWakeWord's training libraries, using about 120 MB instead of 200 MB.
+  - Measured on a Mac: the service uses about 130 MB, and its motion loop under 3% of one Pi core.
+  - The face screen is the part to watch on the real board.
 - **Microphone and speaker:** the default ALSA devices. Pick others with `--mic` and `--speaker` in
   `/etc/systemd/system/peeqo.service` (see `arecord -L` and `aplay -L`).
 - **Hardware access:** the hardware helper (`python/hardware.py`) drives the servo board (PCA9685, I²C bus 1, 0x40),

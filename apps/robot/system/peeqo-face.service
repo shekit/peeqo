@@ -22,7 +22,8 @@ UtmpMode=user
 Environment=WLR_LIBINPUT_NO_DEVICES=1
 # Wait for the service to answer before opening the page.
 ExecStartPre=/bin/sh -c 'for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost/face && exit 0; sleep 1; done; exit 0'
-ExecStart=/usr/bin/cage -s -- @CHROMIUM@ --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --no-first-run --password-store=basic --autoplay-policy=no-user-gesture-required --check-for-update-interval=31536000 --ozone-platform=wayland http://localhost/face
+# Low-memory settings for the Pi 3 B+ (1 GB), and the face drawn at 30 frames a second.
+ExecStart=/usr/bin/cage -s -- @CHROMIUM@ --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --no-first-run --password-store=basic --autoplay-policy=no-user-gesture-required --check-for-update-interval=31536000 --ozone-platform=wayland --enable-low-end-device-mode --renderer-process-limit=2 --disk-cache-size=16000000 --disable-features=Translate,MediaRouter,OptimizationHints http://localhost/face?fps=30
 Restart=always
 RestartSec=3
 

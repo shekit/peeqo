@@ -85,8 +85,14 @@ describe('calibration', () => {
     expect(rescaledAround(working, neutral, 3, 1)).toBeNull(); // a misreading is refused
   });
 
-  it('only believes a saved calibration that makes sense', () => {
+  it('only believes a saved calibration that makes sense, measured ranges included', () => {
     expect(parseCalibration(PRIOR_CALIBRATION)).toEqual(PRIOR_CALIBRATION);
+    const withRanges = { ...PRIOR_CALIBRATION, rangeUs: [[900, 1540], [910, 1530], [905, 1545]] };
+    expect(parseCalibration(withRanges)).toEqual(withRanges);
+    // A damaged range refuses the whole calibration (dropping just the range would lift the limits).
+    for (const rangeUs of [[[900, 1540], [910, 1530]], [[900, 1540], [910, 1530], [1500, 1520]], [[900, 1540], [910, 1530], [600, 1545]], [[900, 1540], [910, 1530], ['x', 1545]]]) {
+      expect(parseCalibration({ ...PRIOR_CALIBRATION, rangeUs })).toBeNull();
+    }
     for (const broken of [
       null,
       { ...PRIOR_CALIBRATION, version: 2 },
@@ -142,6 +148,26 @@ describe('ServoOutput', () => {
     }
     for (let i = 0; i < 10; i++) out.update(0.02);
     expect(sent.at(-1)).toEqual(settled);
+  });
+
+  it('holds still rather than send a pulse outside a measured range', () => {
+    const { link, sent } = fakeLink();
+    const calibration: Calibration = { ...PRIOR_CALIBRATION, rangeUs: [[1100, 1520], [1100, 1520], [1100, 1520]] };
+    const out = new ServoOutput(link, calibration);
+    out.horns([20, 20, 20]); // 1301 µs: inside
+    for (let i = 0; i < 300; i++) out.update(0.02);
+    const settled = sent.at(-1)!;
+    out.horns([20, 20, 40]); // 1072 µs on the last: past its measured top
+    expect(out.state.fault).toMatch(/outside its measured range/);
+    for (let i = 0; i < 20; i++) out.update(0.02);
+    expect(sent.at(-1)).toEqual(settled);
+    // Nor does the first pose after start-up go anywhere if it is outside.
+    const fresh = fakeLink();
+    const cold = new ServoOutput(fresh.link, calibration);
+    cold.horns([20, 20, 40]);
+    cold.update(0.02);
+    expect(fresh.sent).toEqual([]);
+    expect(cold.state.mode).toBe('off');
   });
 
   it('eases into the first pose from rest, then follows the governor at full speed', () => {

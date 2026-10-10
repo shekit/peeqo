@@ -1,3 +1,5 @@
+import type { Triple } from './math.ts';
+
 /**
  * Safety limits enforced by the motion governor. Everything the robot is asked to do (sliders, animations,
  * AI) passes through these; nothing drives the servos directly.
@@ -6,6 +8,11 @@ export interface SafetyLimits {
   /** Horn angle range for every servo, degrees (+ = horn tip up). */
   readonly hornMinDeg: number;
   readonly hornMaxDeg: number;
+  /**
+   * Each servo's own range, degrees, servo order (optional): measured on the robot when it is calibrated. A horn
+   * must be inside both this and the range above.
+   */
+  readonly hornRangesDeg?: Triple<readonly [number, number]>;
   /** Largest allowed |reachRatio|. At 1 the horn and leg line up: a singular, high-force position. */
   readonly maxReachRatio: number;
   /** Largest tilt of a top rod end off its screw, degrees (turning about the screw is free). */

@@ -30,5 +30,7 @@ const install = (...args) =>
 install('-r', `${here}python/requirements.txt`);
 install('--no-deps', 'openwakeword==0.6.0'); // its dependencies are in requirements.txt, less tflite-runtime
 const names = JSON.stringify(words.length > 0 ? words : ['hey_jarvis']);
-run(python, ['-c', `from openwakeword import utils; utils.download_models(model_names=${names})`]);
+// (As in detector.py: the training helper, which needs scikit-learn and scipy, is kept from loading.)
+const stub = "import sys, types; m = types.ModuleType('openwakeword.custom_verifier_model'); m.train_custom_verifier = None; sys.modules['openwakeword.custom_verifier_model'] = m";
+run(python, ['-c', `${stub}; from openwakeword import utils; utils.download_models(model_names=${names})`]);
 console.log(`\nWake word detector ready: ${python}`);

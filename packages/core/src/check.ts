@@ -102,8 +102,11 @@ export function checkPose(
       violations.push({ kind: 'near-singular', servo, value: Math.abs(leg.reachRatio), limit: limits.maxReachRatio });
     }
     const horn = hornDeg[servo];
-    if (horn < limits.hornMinDeg) violations.push({ kind: 'horn-range', servo, value: horn, limit: limits.hornMinDeg });
-    if (horn > limits.hornMaxDeg) violations.push({ kind: 'horn-range', servo, value: horn, limit: limits.hornMaxDeg });
+    const own = limits.hornRangesDeg?.[servo];
+    const hornMin = own ? Math.max(limits.hornMinDeg, own[0]) : limits.hornMinDeg;
+    const hornMax = own ? Math.min(limits.hornMaxDeg, own[1]) : limits.hornMaxDeg;
+    if (horn < hornMin) violations.push({ kind: 'horn-range', servo, value: horn, limit: hornMin });
+    if (horn > hornMax) violations.push({ kind: 'horn-range', servo, value: horn, limit: hornMax });
     if (rodEndTiltDeg[servo] > limits.maxRodEndTiltDeg) {
       violations.push({ kind: 'rod-end-tilt', servo, value: rodEndTiltDeg[servo], limit: limits.maxRodEndTiltDeg });
     }

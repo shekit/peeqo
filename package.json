@@ -13,6 +13,7 @@
     "test": "vitest run",
     "typecheck": "tsc -p packages/core && tsc -p packages/core/tsconfig.test.json && tsc -p packages/face && tsc -p packages/face/tsconfig.test.json && tsc -p packages/character && tsc -p packages/character/tsconfig.test.json && tsc -p packages/brain && tsc -p packages/brain/tsconfig.test.json && tsc -p packages/wakeword && tsc -p apps/robot && tsc -p apps/sim && tsc -p apps/sim/tsconfig.node.json",
     "verify:sim": "npm run verify -w @peeqo/sim",
+    "verify:robot": "npm run verify -w @peeqo/robot",
     "check": "npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {

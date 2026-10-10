@@ -27,6 +27,21 @@ describe('checkPose', () => {
     expect(roll[2]).toBeCloseTo(alpha(4, 0.75), 9);
   });
 
+  it('holds each servo to its own measured range, inside the shared one', () => {
+    const pose = { pitchDeg: 2, rollDeg: 0, heaveMm: 3.2 };
+    const free = checkPose(pose);
+    expect(free.ok).toBe(true);
+    const [front, left] = free.hornDeg;
+    // The front arm was measured to reach a little less high than this pose needs; the others are free.
+    const limits = { ...DEFAULT_SAFETY_LIMITS, hornRangesDeg: [[0, front - 1], [-90, 90], [-90, 90]] as const };
+    const held = checkPose(pose, undefined, limits);
+    expect(held.ok).toBe(false);
+    expect(held.violations).toEqual([{ kind: 'horn-range', servo: 0, value: front, limit: front - 1 }]);
+    // A servo's own range never widens the shared one.
+    const wide = checkPose(pose, undefined, { ...DEFAULT_SAFETY_LIMITS, hornMaxDeg: left - 1, hornRangesDeg: [[-90, 90], [-90, 90], [-90, 90]] as const });
+    expect(wide.violations.some((v) => v.kind === 'horn-range' && v.servo === 1 && v.limit === left - 1)).toBe(true);
+  });
+
   it('names each problem once, with the servos or parts involved', () => {
     const check = checkPose({ pitchDeg: 20, rollDeg: 0, heaveMm: 3 });
     expect(check.ok).toBe(false);

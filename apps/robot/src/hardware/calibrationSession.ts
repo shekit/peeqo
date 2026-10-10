@@ -1,10 +1,13 @@
 import type { Pose, ServoIndex, Triple } from '@peeqo/core';
 import {
   HORN_RANGE_DEG,
+  MIN_RANGE_US,
   PRIOR_CALIBRATION,
   REST_US,
+  SERVO_NAMES,
   channelPulses,
   hornAngles,
+  hornRanges,
   pulseForHorn,
   rescaled,
   trimmed,
@@ -16,16 +19,23 @@ import { RAW_RANGE_US } from './servoOutput.ts';
  * The guided calibration, done with someone watching (the cloth cover off, so the three servo arms show):
  *
  * 1. identify: each channel wiggles its arm a little (±1.3°) and they say which arm moved.
- * 2. arms: for each arm, they press + once and say whether it went up or down; then nudge it until it points level.
- *    That gives each servo's direction and level pulse.
+ * 2. arms, for each arm in turn:
+ *    - direction: they press + once and say whether it went up or down;
+ *    - lowest: they nudge it down until it is just short of touching anything, and mark it;
+ *    - highest: they nudge it up until it is as high as it should go (just short of binding), and mark it;
+ *    - level: they nudge it (within what they marked) until it points level.
+ *    That gives each servo's direction, measured range and level pulse.
  * 3. level: Peeqo rises to its neutral pose; with a level app on its head, they trim the tilt to zero.
  * 4. check: Peeqo tilts back 3°; they read the level, which corrects the scale (microseconds per degree).
- * 5. save.
+ * 5. save. From then on nothing is ever sent outside the measured ranges, and the motion governor keeps a margin
+ *    inside them.
  *
  * Every move is a raw pulse near the 2019 resting pulse (1500 µs, where the 2019 software always put the servos),
- * made slowly by ServoOutput, and arms may only go a little below where they started (they rest near their holders).
+ * made slowly by ServoOutput in small steps, with someone watching.
  */
 export type CalibrationStep = 'off' | 'identify' | 'arms' | 'level' | 'check' | 'done';
+/** Where the current arm is in the arms step. */
+export type ArmPhase = 'direction' | 'lowest' | 'highest' | 'level';
 
 export interface CalibrationView {
   readonly step: CalibrationStep;
@@ -33,9 +43,12 @@ export interface CalibrationView {
   readonly channel: number;
   /** Which servo each channel drives (null: not yet known). */
   readonly channelServo: readonly (ServoIndex | null)[];
-  /** arms: the servo being set up. */
+  /** arms: the servo being set up, and how far it has got. */
   readonly servo: ServoIndex;
+  readonly armPhase: ArmPhase;
   readonly directions: readonly (1 | -1 | null)[];
+  /** Each servo's measured range, [smaller, larger] µs (null until both ends are marked). */
+  readonly rangeUs: readonly (readonly [number, number] | null)[];
   readonly levelUs: readonly (number | null)[];
   /** Pulses being commanded, by channel. */
   readonly pulsesUs: readonly number[];
@@ -50,8 +63,8 @@ export interface CalibrationDeps {
   readonly raw: (pulsesUs: readonly number[]) => void;
   /** The governor's neutral pose. */
   readonly neutral: Pose;
-  /** Store the result and hand the servos back to the governor. */
-  readonly save: (calibration: Calibration) => void;
+  /** Store the result and hand the servos back to the governor; returns why not, if it cannot be used. */
+  readonly save: (calibration: Calibration) => string | null;
   /** Leave calibration without saving (back to the old calibration, or holding at rest). */
   readonly cancel: () => void;
   readonly now?: () => number;
@@ -63,10 +76,10 @@ export const WIGGLE_US = 15;
 export const NUDGE_US = 5;
 /** The direction test: one press of +. */
 export const PROBE_US = 20;
-/** How far below where it started (the resting pulse) an arm may be moved: about 10°. */
-export const MAX_DOWN_US = 114;
-/** How far from the resting pulse an arm may be nudged by hand (about 35°). */
+/** Looking for an arm's lowest point: how far from the resting pulse it may be nudged, either way (about 35°). */
 export const ARM_RANGE_US = 400;
+/** Looking for its highest point: how far above the resting pulse (about 61°: the most calibration can drive). */
+export const HIGHEST_US = RAW_RANGE_US;
 /** The tilt check. */
 export const CHECK_TILT_DEG = 3;
 /** The most the level step may correct, in all: more means the arms were not levelled (start over instead). */
@@ -78,6 +91,10 @@ export class CalibrationSession {
   #channel = 0;
   #channelServo: (ServoIndex | null)[] = [null, null, null];
   #servo: ServoIndex = 0;
+  #armPhase: ArmPhase = 'direction';
+  /** The current arm's marks, as "up" from the resting pulse (µs, positive = horn up). */
+  #lowestUp = 0;
+  #rangeUs: ([number, number] | null)[] = [null, null, null];
   #directions: (1 | -1 | null)[] = [null, null, null];
   #levelUs: (number | null)[] = [null, null, null];
   #pulses: number[] = [REST_US, REST_US, REST_US];
@@ -101,7 +118,9 @@ export class CalibrationSession {
       channel: this.#channel,
       channelServo: [...this.#channelServo],
       servo: this.#servo,
+      armPhase: this.#armPhase,
       directions: [...this.#directions],
+      rangeUs: this.#rangeUs.map((r) => (r ? ([r[0], r[1]] as const) : null)),
       levelUs: [...this.#levelUs],
       pulsesUs: [...this.#pulses],
       usPerDeg: this.#working?.usPerDeg ?? PRIOR_CALIBRATION.usPerDeg,
@@ -117,6 +136,9 @@ export class CalibrationSession {
     this.#channel = 0;
     this.#channelServo = [null, null, null];
     this.#servo = 0;
+    this.#armPhase = 'direction';
+    this.#lowestUp = 0;
+    this.#rangeUs = [null, null, null];
     this.#directions = [null, null, null];
     this.#levelUs = [null, null, null];
     this.#working = null;
@@ -133,12 +155,20 @@ export class CalibrationSession {
     const at = (us: number) => this.#pulses.map((p, c) => (c === channel ? us : p));
     const base = REST_US;
     const pattern = [base + WIGGLE_US, base - WIGGLE_US, base + WIGGLE_US, base - WIGGLE_US, base + WIGGLE_US, base - WIGGLE_US, base];
-    pattern.forEach((us, i) => this.#timers.push(setTimeout(() => this.#send(at(us)), i * 350)));
+    pattern.forEach((us, i) =>
+      this.#timers.push(
+        setTimeout(() => {
+          // Only while still looking at this channel (an answer before the wiggle ends stops it).
+          if (this.#step === 'identify' && this.#channel === channel) this.#send(at(us));
+        }, i * 350),
+      ),
+    );
   }
 
   /** identify: the arm that moved. */
   identified(servo: ServoIndex): void {
     if (this.#step !== 'identify') return;
+    this.#clearTimers();
     if (this.#channelServo.includes(servo)) {
       this.#message = 'That arm was already matched to another channel. Watch closely and try again, or start over.';
       return;
@@ -152,44 +182,93 @@ export class CalibrationSession {
     }
     this.#step = 'arms';
     this.#servo = 0;
+    this.#armPhase = 'direction';
   }
 
   /** arms: one press of + on the current arm, to see which way it turns. */
   probe(): void {
-    if (this.#step !== 'arms') return;
+    if (this.#step !== 'arms' || this.#armPhase !== 'direction') return;
     const channel = this.#channelOf(this.#servo);
     this.#send(this.#pulses.map((p, c) => (c === channel ? p + PROBE_US : p)));
   }
 
-  /** arms: which way the + press moved the arm. */
+  /** arms: which way the + press moved the arm (then: find its lowest point). */
   plusMoved(up: boolean): void {
-    if (this.#step !== 'arms') return;
+    if (this.#step !== 'arms' || this.#armPhase !== 'direction') return;
     this.#directions[this.#servo] = up ? 1 : -1;
     const known = this.#directions.filter((d): d is 1 | -1 => d !== null);
     this.#message = new Set(known).size > 1 ? 'The arms turn different ways, which is unusual for this neck (they are mounted alike). Check before going on.' : null;
+    this.#armPhase = 'lowest';
   }
 
-  /** arms: moves the current arm up (+) or down (−) by `steps` nudges; down only a little below where it started. */
+  /**
+   * arms: moves the current arm up (+) or down (−) by `steps` nudges, within what this phase allows: looking for its
+   * lowest point, ARM_RANGE_US either side of rest; for its highest, from above its lowest up to HIGHEST_US;
+   * levelling, between the two marks.
+   */
   nudge(steps: number): void {
-    if (this.#step !== 'arms' || !Number.isFinite(steps)) return;
+    if (this.#step !== 'arms' || this.#armPhase === 'direction' || !Number.isFinite(steps)) return;
     const direction = this.#directions[this.#servo];
-    if (direction !== 1 && direction !== -1) return; // the + test comes first
+    if (direction !== 1 && direction !== -1) return;
     const channel = this.#channelOf(this.#servo);
-    // Measured upward from the resting pulse: no more than MAX_DOWN_US below it, nor ARM_RANGE_US above.
+    const range = this.#rangeUs[this.#servo];
+    const [low, high] =
+      this.#armPhase === 'lowest'
+        ? [-ARM_RANGE_US, ARM_RANGE_US]
+        : this.#armPhase === 'highest'
+          ? [this.#lowestUp + MIN_RANGE_US, HIGHEST_US]
+          : range
+            ? this.#upRange(range, direction)
+            : [0, 0];
     const wantedUp = (this.#pulses[channel]! - REST_US) * direction + Math.round(steps) * NUDGE_US;
-    const up = Math.min(ARM_RANGE_US, Math.max(-MAX_DOWN_US, wantedUp));
-    const limited = REST_US + up * direction;
+    const up = Math.min(high, Math.max(low, wantedUp));
     this.#message =
-      wantedUp < -MAX_DOWN_US ? 'That is as low as the arm may go here (it is close to its holder).' : wantedUp > ARM_RANGE_US ? 'That is as high as the arm may go while calibrating.' : null;
-    this.#send(this.#pulses.map((p, c) => (c === channel ? limited : p)));
+      wantedUp < low
+        ? this.#armPhase === 'level'
+          ? 'That is the lowest point you marked.'
+          : this.#armPhase === 'highest'
+            ? 'That is as close to its lowest mark as the highest can be.'
+            : 'That is as far down as calibration goes.'
+        : wantedUp > high
+          ? this.#armPhase === 'level'
+            ? 'That is the highest point you marked.'
+            : 'That is as far up as calibration goes.'
+          : null;
+    this.#send(this.#pulses.map((p, c) => (c === channel ? REST_US + up * direction : p)));
   }
 
-  /** arms: the current arm points level. */
+  /** arms: the current arm is just short of touching anything below it. */
+  markLowest(): void {
+    if (this.#step !== 'arms' || this.#armPhase !== 'lowest') return;
+    const direction = this.#directions[this.#servo]!;
+    this.#lowestUp = (this.#pulses[this.#channelOf(this.#servo)]! - REST_US) * direction;
+    this.#armPhase = 'highest';
+    this.#message = null;
+  }
+
+  /** arms: the current arm is as high as it should go. */
+  markHighest(): void {
+    if (this.#step !== 'arms' || this.#armPhase !== 'highest') return;
+    const direction = this.#directions[this.#servo]!;
+    const highestUp = (this.#pulses[this.#channelOf(this.#servo)]! - REST_US) * direction;
+    if (highestUp < this.#lowestUp + MIN_RANGE_US) {
+      this.#message = 'Move it up from its lowest point first.';
+      return;
+    }
+    const a = REST_US + this.#lowestUp * direction;
+    const b = REST_US + highestUp * direction;
+    this.#rangeUs[this.#servo] = [Math.min(a, b), Math.max(a, b)];
+    this.#armPhase = 'level';
+    this.#message = null;
+  }
+
+  /** arms: the current arm points level (then the next arm, or, after the third, Peeqo rises). */
   armLevel(): void {
-    if (this.#step !== 'arms' || this.#directions[this.#servo] === null) return;
+    if (this.#step !== 'arms' || this.#armPhase !== 'level') return;
     this.#levelUs[this.#servo] = this.#pulses[this.#channelOf(this.#servo)]!;
     if (this.#servo < 2) {
       this.#servo = (this.#servo + 1) as ServoIndex;
+      this.#armPhase = 'direction';
       return;
     }
     // All three: Peeqo rises to its neutral pose.
@@ -201,6 +280,7 @@ export class CalibrationSession {
       levelUs: this.#levelUs as unknown as Triple,
       usPerDeg: PRIOR_CALIBRATION.usPerDeg,
       checked: false,
+      rangeUs: this.#rangeUs.map((r) => [r![0], r![1]] as const) as unknown as Triple<readonly [number, number]>,
     };
     this.#step = 'level';
     this.#sendPose(this.#deps.neutral);
@@ -256,8 +336,12 @@ export class CalibrationSession {
   /** Saves (from the level or done step: the tilt check is recommended, not required). */
   save(): boolean {
     if ((this.#step !== 'level' && this.#step !== 'done') || !this.#working) return false;
+    const problem = this.#deps.save(this.#working);
+    if (problem) {
+      this.#message = problem;
+      return false;
+    }
     this.#clearTimers();
-    this.#deps.save(this.#working);
     this.#step = 'off';
     return true;
   }
@@ -284,7 +368,22 @@ export class CalibrationSession {
       this.#message = 'That move is outside what calibration allows; the arms may not have been level. Start over and check them.';
       return;
     }
+    // Inside each arm's measured range, with the governor's margin.
+    const ranges = hornRanges(working);
+    const outside = ranges ? horns.findIndex((h, s) => h < ranges[s as ServoIndex][0] || h > ranges[s as ServoIndex][1]) : -1;
+    if (ranges && outside >= 0) {
+      const r = ranges[outside as ServoIndex];
+      this.#message = `That needs ${SERVO_NAMES[outside as ServoIndex]} arm at ${horns[outside as ServoIndex].toFixed(1)}°, outside the range you marked for it (${r[0].toFixed(1)}° to ${r[1].toFixed(1)}° with a margin). Check its marks and start over.`;
+      return;
+    }
     this.#send(pulses);
+  }
+
+  /** A measured range as "up" from the resting pulse, [lowest, highest]. */
+  #upRange(range: readonly [number, number], direction: 1 | -1): [number, number] {
+    const a = (range[0] - REST_US) * direction;
+    const b = (range[1] - REST_US) * direction;
+    return [Math.min(a, b), Math.max(a, b)];
   }
 
   #send(pulses: readonly number[]): void {

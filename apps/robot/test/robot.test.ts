@@ -148,7 +148,7 @@ describe('the robot (no hardware) and its web server', () => {
   beforeAll(async () => {
     dir = tempDir();
     robot = new Robot({ dataDir: dir, fake: true, appDir: APP_DIR, log: () => undefined });
-    const calibration = new CalibrationSession({ raw: (p) => robot.servos.raw(p), neutral: robot.governor.neutral, save: () => undefined, cancel: () => undefined });
+    const calibration = new CalibrationSession({ raw: (p) => robot.servos.raw(p), neutral: robot.governor.neutral, save: (c) => robot.useCalibration(c), cancel: () => undefined });
     const setup = new SetupController({ network: new FakeNetwork(), config: robot.config, showScreen: () => undefined, applySettings: () => undefined, log: () => undefined, hostname: 'peeqo' });
     server = new RobotServer({ robot, setup, calibration, webDir: path.join(APP_DIR, 'dist', 'web'), port: 0, host: '127.0.0.1', setupAddress: SETUP_ADDRESS, sessionsFile: path.join(dir, 'sessions.json') });
     await robot.start();
@@ -194,6 +194,21 @@ describe('the robot (no hardware) and its web server', () => {
     // Sessions survive a restart (kept hashed).
     const saved = fs.readFileSync(path.join(dir, 'sessions.json'), 'utf8');
     expect(saved).not.toContain(session.split('=')[1]!);
+  });
+
+  it('takes a calibration with measured ranges into the governor, and refuses ranges that leave no room for its normal pose', () => {
+    const base = { version: 1 as const, channels: [1, 0, 2] as const, directions: [-1, -1, -1] as const, levelUs: [1530, 1530, 1530] as const, usPerDeg: 2060 / 180, checked: true };
+    // Every arm can only reach 10° above level: its neutral pose (27°) is out of reach.
+    const tight = { ...base, rangeUs: [[1400, 1560], [1400, 1560], [1400, 1560]] as const };
+    expect(robot.useCalibration(tight)).toMatch(/does not fit inside the ranges you marked/);
+    expect(robot.governor.limits.hornRangesDeg).toBeUndefined();
+    // A real range: the governor holds each servo inside it, a margin in from the marks.
+    const fine = { ...base, rangeUs: [[900, 1560], [950, 1560], [900, 1560]] as const };
+    expect(robot.useCalibration(fine)).toBeNull();
+    const ranges = robot.governor.limits.hornRangesDeg!;
+    expect(ranges[1][1]).toBeCloseTo((1530 - 950) / (2060 / 180) - 1.5, 6);
+    expect(robot.config.config.calibration?.rangeUs).toEqual(fine.rangeUs);
+    expect(robot.servos.calibration).toEqual(fine);
   });
 
   it('talks, and calibrates only from the resting pulse', async () => {

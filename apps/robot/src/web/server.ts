@@ -257,6 +257,12 @@ export class RobotServer {
       case 'nudge':
         session.nudge(n(body.steps));
         break;
+      case 'markLowest':
+        session.markLowest();
+        break;
+      case 'markHighest':
+        session.markHighest();
+        break;
       case 'armLevel':
         session.armLevel();
         break;
@@ -270,7 +276,7 @@ export class RobotServer {
         session.reading(n(body.deg));
         break;
       case 'save':
-        if (!session.save()) return json(res, 400, { error: 'Not ready to save yet.', view: session.view() });
+        if (!session.save()) return json(res, 400, { error: session.view().message ?? 'Not ready to save yet.', view: session.view() });
         break;
       case 'cancel':
         session.cancel();

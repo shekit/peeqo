@@ -18,7 +18,18 @@ export interface Calibration {
   readonly usPerDeg: number;
   /** Whether usPerDeg was checked against a level (the tilt check). */
   readonly checked: boolean;
+  /**
+   * Each servo's range as measured on the robot (the range step): the lowest and highest pulse, as [smaller,
+   * larger] µs, at which its arm was just short of touching or binding. Nothing is ever sent outside it, and the
+   * motion governor keeps RANGE_MARGIN_DEG inside it. Missing on calibrations made before the range step.
+   */
+  readonly rangeUs?: Triple<readonly [number, number]>;
 }
+
+/** How far inside each measured range the motion governor keeps (the measured ends are "just before it touches"). */
+export const RANGE_MARGIN_DEG = 1.5;
+/** The narrowest range believed (anything less is a mistake in marking it). */
+export const MIN_RANGE_US = 60;
 
 export const SERVO_NAMES: Triple<string> = ['front', "Peeqo's left", "Peeqo's right"];
 
@@ -110,6 +121,21 @@ export function rescaledAround(calibration: Calibration, at: Pose, askedDeg: num
   return { ...scaled, levelUs };
 }
 
+/**
+ * Each servo's usable horn angles from its measured range, [lowest, highest] degrees, RANGE_MARGIN_DEG inside the
+ * measured ends; null for a calibration without measured ranges.
+ */
+export function hornRanges(calibration: Calibration): Triple<readonly [number, number]> | null {
+  const range = calibration.rangeUs;
+  if (!range) return null;
+  return [0, 1, 2].map((s) => {
+    const servo = s as ServoIndex;
+    const a = hornForPulse(calibration, servo, range[servo][0]);
+    const b = hornForPulse(calibration, servo, range[servo][1]);
+    return [Math.min(a, b) + RANGE_MARGIN_DEG, Math.max(a, b) - RANGE_MARGIN_DEG] as const;
+  }) as unknown as Triple<readonly [number, number]>;
+}
+
 /** A calibration read back from the config, or null if it is missing or not believable. */
 export function parseCalibration(value: unknown): Calibration | null {
   if (!value || typeof value !== 'object') return null;
@@ -121,6 +147,17 @@ export function parseCalibration(value: unknown): Calibration | null {
   if (!triple(c.directions, (x) => x === 1 || x === -1)) return null;
   if (!triple(c.levelUs, (x) => typeof x === 'number' && x >= LEVEL_US_RANGE[0] && x <= LEVEL_US_RANGE[1])) return null;
   if (!(typeof c.usPerDeg === 'number' && c.usPerDeg >= US_PER_DEG_RANGE[0] && c.usPerDeg <= US_PER_DEG_RANGE[1])) return null;
+  let rangeUs: Triple<readonly [number, number]> | undefined;
+  if (c.rangeUs !== undefined) {
+    // A damaged range must not quietly disappear (that would lift the limits): the whole calibration is refused.
+    const ok = (r: unknown) =>
+      Array.isArray(r) &&
+      r.length === 2 &&
+      r.every((us) => typeof us === 'number' && Number.isFinite(us) && us >= REST_US - 700 && us <= REST_US + 700) &&
+      (r[1] as number) - (r[0] as number) >= MIN_RANGE_US;
+    if (!triple(c.rangeUs, ok)) return null;
+    rangeUs = (c.rangeUs as number[][]).map((r) => [r[0]!, r[1]!] as const) as unknown as Triple<readonly [number, number]>;
+  }
   return {
     version: 1,
     channels: channels as unknown as Triple<number>,
@@ -128,5 +165,6 @@ export function parseCalibration(value: unknown): Calibration | null {
     levelUs: c.levelUs as unknown as Triple,
     usPerDeg: c.usPerDeg,
     checked: c.checked === true,
+    ...(rangeUs ? { rangeUs } : {}),
   };
 }

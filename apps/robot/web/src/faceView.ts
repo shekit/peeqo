@@ -21,7 +21,7 @@ const MEDIA_LOAD_MS = 6000;
  * loads and reports back on, captions, and screens of information over the face (setup QR codes, its address).
  * The robot's screen shows it full size; the panel shows a small copy.
  */
-export function startFace(canvas: HTMLCanvasElement, overlay: HTMLElement, options: { onConnection?: (connected: boolean) => void } = {}): void {
+export function startFace(canvas: HTMLCanvasElement, overlay: HTMLElement, options: { onConnection?: (connected: boolean) => void; fps?: number } = {}): void {
   canvas.width = FACE_WIDTH;
   canvas.height = FACE_HEIGHT;
   const context = canvas.getContext('2d')!;
@@ -180,8 +180,14 @@ export function startFace(canvas: HTMLCanvasElement, overlay: HTMLElement, optio
   };
   connect();
 
+  // Drawn at most `fps` times a second (the robot's small Pi draws 30; the eyes' timing does not depend on it).
+  const interval = 1000 / Math.min(60, Math.max(10, options.fps ?? 60));
+  let lastDraw = -Infinity;
   const frame = (now: number) => {
-    if (face.update(now)) face.draw(context);
+    if (now - lastDraw >= interval - 4) {
+      lastDraw = now;
+      if (face.update(now)) face.draw(context);
+    }
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);

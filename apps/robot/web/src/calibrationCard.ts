@@ -5,7 +5,9 @@ export interface CalibrationView {
   channel: number;
   channelServo: (0 | 1 | 2 | null)[];
   servo: 0 | 1 | 2;
+  armPhase: 'direction' | 'lowest' | 'highest' | 'level';
   directions: (1 | -1 | null)[];
+  rangeUs: ([number, number] | null)[];
   levelUs: (number | null)[];
   pulsesUs: number[];
   usPerDeg: number;
@@ -17,11 +19,11 @@ const ARMS = ['the front arm (under the face)', 'the arm on Peeqo’s left', 'th
 const ARM_BUTTONS = ['Front', 'Peeqo’s left', 'Peeqo’s right'];
 
 /** A top view of the three arms, so "Peeqo's left" is not confused with yours. */
-function armsDiagram(highlight: number | null): SVGSVGElement {
+function armsDiagram(highlight: number | null): HTMLElement {
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', '-60 -60 120 130');
-  svg.setAttribute('width', '150');
+  svg.setAttribute('viewBox', '-50 -56 100 100');
+  svg.setAttribute('width', '130');
   const add = (tag: string, attrs: Record<string, string | number>, text?: string) => {
     const node = document.createElementNS(ns, tag);
     for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
@@ -38,9 +40,12 @@ function armsDiagram(highlight: number | null): SVGSVGElement {
     add('circle', { cx: x, cy: y, r: 9, fill: highlight === servo ? '#2563eb' : '#fff', stroke: '#2563eb' });
     add('text', { x, y: y + 3, 'text-anchor': 'middle', 'font-size': 8, fill: highlight === servo ? '#fff' : '#2563eb' }, String(servo + 1));
   });
-  add('text', { x: 0, y: 58, 'text-anchor': 'middle', 'font-size': 8, fill: '#667085' }, 'seen from above, face at the top');
-  add('text', { x: 0, y: 68, 'text-anchor': 'middle', 'font-size': 8, fill: '#667085' }, '2 = Peeqo’s left · 3 = Peeqo’s right');
-  return svg;
+  return el(
+    'div',
+    { style: 'display: grid; justify-items: center; gap: 2px; max-width: 170px' },
+    svg as unknown as Node,
+    el('span', { class: 'muted small', style: 'text-align: center; font-size: 11px', text: 'From above, face at the top. 2 is Peeqo’s left, 3 its right (as you face it: your right, your left).' }),
+  );
 }
 
 /**
@@ -65,7 +70,7 @@ export function calibrationCard(card: HTMLElement): (view: CalibrationView, cali
       case 'off':
         parts.push(
           el('p', { text: calibrated ? 'Peeqo is calibrated. Do it again if its head does not sit level, or after taking the neck apart.' : 'Peeqo’s servos stay still until it is calibrated. It takes about 10 minutes, once.' }),
-          el('p', { class: 'muted small', text: 'Take off the cloth cover so you can see the three servo arms at the base, and keep fingers clear: Peeqo makes small, slow moves.' }),
+          el('p', { class: 'muted small', text: 'Take off the cloth cover so you can see the three servo arms at the base, and keep fingers clear: Peeqo makes small, slow moves. For each arm you will mark how low and how high it can safely go; Peeqo never goes outside those marks.' }),
           button(calibrated ? 'Calibrate again' : 'Start calibration', 'start', {}, 'primary'),
         );
         break;
@@ -79,15 +84,37 @@ export function calibrationCard(card: HTMLElement): (view: CalibrationView, cali
         break;
       }
       case 'arms': {
-        const direction = view.directions[view.servo];
+        const nudges = (fine: string, coarse: string) =>
+          el('div', { class: 'row' }, button(`▲ ${fine}`, 'nudge', { steps: 1 }), button('▲▲', 'nudge', { steps: 5 }), button(`▼ ${coarse}`, 'nudge', { steps: -1 }), button('▼▼', 'nudge', { steps: -5 }));
         parts.push(el('div', { class: 'row' }, armsDiagram(view.servo), el('p', { class: 'grow', text: `Now ${ARMS[view.servo]}.` })));
-        if (direction === null) {
-          parts.push(el('p', { text: 'Press “+ once” and watch that arm.' }), el('div', { class: 'row' }, button('+ once', 'probe', {}, 'primary'), el('span', { class: 'muted', text: 'Did it go…' }), button('Up', 'plusMoved', { up: true }), button('Down', 'plusMoved', { up: false })));
-        } else {
-          parts.push(
-            el('p', { text: 'Move it until it points straight out, level. Stop before it touches anything.' }),
-            el('div', { class: 'row' }, button('▲ up', 'nudge', { steps: 1 }), button('▲▲', 'nudge', { steps: 5 }), button('▼ down', 'nudge', { steps: -1 }), button('▼▼', 'nudge', { steps: -5 }), button('It’s level', 'armLevel', {}, 'primary')),
-          );
+        switch (view.armPhase) {
+          case 'direction':
+            parts.push(el('p', { text: 'Press “+ once” and watch that arm.' }), el('div', { class: 'row' }, button('+ once', 'probe', {}, 'primary'), el('span', { class: 'muted', text: 'Did it go…' }), button('Up', 'plusMoved', { up: true }), button('Down', 'plusMoved', { up: false })));
+            break;
+          case 'lowest':
+            parts.push(
+              el('p', { text: 'Move it down, a step at a time, until it is just about to touch anything (its holder, the base, a screw). Stop before it touches, then mark it.' }),
+              el('p', { class: 'muted small', text: 'Each ▲/▼ is about half a degree; ▲▲/▼▼ are five. Use single steps near the end.' }),
+              nudges('up', 'down'),
+              el('div', { class: 'row', style: 'margin-top: 8px' }, button('Mark lowest', 'markLowest', {}, 'primary')),
+            );
+            break;
+          case 'highest':
+            parts.push(
+              el('p', { text: 'Now move it up until it is as high as it should go: stop just before it binds, strains or touches anything, then mark it.' }),
+              nudges('up', 'down'),
+              el('div', { class: 'row', style: 'margin-top: 8px' }, button('Mark highest', 'markHighest', {}, 'primary')),
+            );
+            break;
+          case 'level': {
+            const range = view.rangeUs[view.servo];
+            parts.push(
+              el('p', { text: 'Move it until it points straight out, level (it stays between your marks).' }),
+              range ? el('p', { class: 'muted small', text: `Marked: ${Math.round(range[0])}–${Math.round(range[1])} µs` }) : null,
+              el('div', { class: 'row' }, button('▲ up', 'nudge', { steps: 1 }), button('▲▲', 'nudge', { steps: 5 }), button('▼ down', 'nudge', { steps: -1 }), button('▼▼', 'nudge', { steps: -5 }), button('It’s level', 'armLevel', {}, 'primary')),
+            );
+            break;
+          }
         }
         break;
       }

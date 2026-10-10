@@ -61,9 +61,12 @@ The robot runs `apps/robot`: the same brain, character and governor as the simul
 - **Deploy:** flash Raspberry Pi OS Lite (64-bit) with SSH on, then run `npm run deploy -w @peeqo/robot` from a
   laptop. The installer sets up everything else.
 - **Wi-Fi:** from a phone. Peeqo shows a QR code for its setup network when it knows no Wi-Fi.
-- **Calibration:** guided, from the panel, with the cloth off. Each arm's channel, direction and level are found by
-  eye, then the head is levelled with a phone level and the scale checked with a 3° tilt. The servos stay limp until
-  this is done. On the robot, the governor keeps every horn between 5° and 55°.
+- **Calibration:** guided, from the panel, with the cloth off.
+  - Each arm's channel, direction, measured range (its lowest and highest safe points) and level are found by eye.
+  - Then the head is levelled with a phone level and the scale checked with a 3° tilt.
+  - The servos stay limp until this is done.
+  - The measured ranges become hard limits: the governor plans 1.5° inside them, and the driver never goes outside
+    them. On the robot, the governor also keeps every horn between 5° and 55°.
 - **Still to check on the hardware:**
   - the screen's resolution and rotation;
   - the audio devices;

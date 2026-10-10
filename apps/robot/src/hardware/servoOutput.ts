@@ -32,7 +32,8 @@ export interface ServoState {
 /**
  * The only way to the servos. Off at start-up (no pulses: the servos are limp). The calibration tool drives channels
  * directly ("raw"), slowly and only near the 2019 resting pulse. Once calibrated, it takes horn angles from the motion
- * governor ("pose") and refuses any outside the guard range. Every change of position moves all channels together
+ * governor ("pose") and refuses any outside the guard range, or any pulse outside a servo's measured range (the
+ * governor keeps inside those, so this only ever catches a fault). Every change of position moves all channels together
  * (they arrive at the same moment, so the head moves in a straight line between the poses), and no faster than
  * allowed: slowly for the calibration tool and for the first move after start-up (from the resting pulse, where the
  * 2019 software always left the servos), at the servos' top speed after that (the governor keeps well under it).
@@ -110,13 +111,20 @@ export class ServoOutput {
       this.#fault = `refused a horn angle of ${Number.isFinite(bad) ? bad.toFixed(1) : String(bad)}°: holding still`;
       return;
     }
+    const perServo: Triple = [0, 1, 2].map((s) => pulseForHorn(calibration, s as 0 | 1 | 2, hornDeg[s as 0 | 1 | 2])) as unknown as Triple;
+    const range = calibration.rangeUs;
+    const outside = range ? perServo.findIndex((us, s) => us < range[s as 0 | 1 | 2][0] || us > range[s as 0 | 1 | 2][1]) : -1;
+    if (outside >= 0) {
+      // Holding everything still keeps the head where it is; moving the others alone would put it somewhere unplanned.
+      this.#fault = `refused ${perServo[outside]!.toFixed(0)} µs for servo ${outside}: outside its measured range, holding still`;
+      return;
+    }
     this.#fault = null;
     if (this.#mode !== 'pose') {
       this.#start();
       this.#slow = true; // a calmer first move (from rest, or from where calibration ended)
       this.#mode = 'pose';
     }
-    const perServo: Triple = [0, 1, 2].map((s) => pulseForHorn(calibration, s as 0 | 1 | 2, hornDeg[s as 0 | 1 | 2])) as unknown as Triple;
     this.#target = channelPulses(calibration, perServo);
   }
 

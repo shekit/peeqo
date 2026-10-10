@@ -27,7 +27,7 @@ import { ConfigStore, readFileOrNull, writeFileSafely } from './config.ts';
 import { MirroredFace, type FaceScreen } from './face/mirroredFace.ts';
 import { RobotBody } from './face/robotBody.ts';
 import { apa102Frame } from './hardware/apa102.ts';
-import { HORN_RANGE_DEG } from './hardware/calibration.ts';
+import { HORN_RANGE_DEG, hornRanges, type Calibration } from './hardware/calibration.ts';
 import { HardwareLink, type HardwareOutputs, type HardwareStatus } from './hardware/link.ts';
 import { ServoOutput, type ServoState } from './hardware/servoOutput.ts';
 
@@ -40,6 +40,12 @@ import { ServoOutput, type ServoState } from './hardware/servoOutput.ts';
 export const ROBOT_LIMITS: SafetyLimits = Object.freeze({ ...DEFAULT_SAFETY_LIMITS, hornMinDeg: HORN_RANGE_DEG[0], hornMaxDeg: HORN_RANGE_DEG[1], minHeaveMm: 1, maxHeaveMm: 5.4 });
 /** The simulator's neutral pose (level, 3.2 mm up: the most room to move), which gestures are designed around. */
 const NEUTRAL = findNeutralPose();
+
+/** The robot's limits with a calibration's measured ranges (if it has them) for each servo. */
+export function limitsFor(calibration: Calibration | null): SafetyLimits {
+  const ranges = calibration ? hornRanges(calibration) : null;
+  return ranges ? Object.freeze({ ...ROBOT_LIMITS, hornRangesDeg: ranges }) : ROBOT_LIMITS;
+}
 
 const STEP_S = 0.01;
 const MAX_STEPS_PER_TICK = 10;
@@ -102,7 +108,6 @@ export class Robot {
   readonly options: RobotOptions;
   readonly config: ConfigStore;
   readonly face: MirroredFace;
-  readonly governor: MotionGovernor;
   readonly animator: HeadAnimator;
   readonly strip = new DotstarStrip(12);
   readonly leds: LedAnimator;
@@ -118,6 +123,7 @@ export class Robot {
   readonly recorder: UtteranceRecorder;
   /** While true, the calibration tool drives the servos and the governor's poses are not sent. */
   calibrating = false;
+  #governor: MotionGovernor;
   #outputs = new QueuedOutputs();
   #link: HardwareLink | null = null;
   #hardware: HardwareStatus | null = null;
@@ -143,14 +149,25 @@ export class Robot {
     const paths = this.config.paths;
     const seed = () => (Math.random() * 2 ** 32) >>> 0;
     this.face = new MirroredFace({ seed: seed() });
-    this.governor = new MotionGovernor(undefined, ROBOT_LIMITS, NEUTRAL);
-    this.animator = new HeadAnimator(this.governor.neutral, { seed: seed() });
+    // The saved calibration's measured ranges become the governor's limits. If they no longer allow the neutral pose
+    // (an edited file), the servos are not driven at all until Peeqo is calibrated again.
+    let calibration = this.config.config.calibration;
+    let governor: MotionGovernor;
+    try {
+      governor = new MotionGovernor(undefined, limitsFor(calibration), NEUTRAL);
+    } catch (error) {
+      governor = new MotionGovernor(undefined, ROBOT_LIMITS, NEUTRAL);
+      calibration = null;
+      this.#pendingLog = `the saved calibration's ranges do not allow the neutral pose (${error instanceof Error ? error.message : String(error)}): calibrate again`;
+    }
+    this.#governor = governor;
+    this.animator = new HeadAnimator(governor.neutral, { seed: seed() });
     this.leds = new LedAnimator(this.strip, { seed: seed() });
     this.speaker = new Speaker({ fake: options.fake, device: options.speakerDevice ?? null });
     this.character = new Character({ head: this.animator, face: this.face, leds: this.leds, sound: this.speaker });
     this.life = new Life(this.character, { seed: seed() });
     this.body = new RobotBody({ character: this.character, face: this.face, now: () => performance.now(), caption: (text) => this.#line('peeqo', text) });
-    this.servos = new ServoOutput(this.#outputs, this.config.config.calibration);
+    this.servos = new ServoOutput(this.#outputs, calibration);
 
     this.memory = new Memory({
       store: { load: () => readFileOrNull(paths.memory), save: (markdown) => writeFileSafely(paths.memory, markdown) },
@@ -219,6 +236,32 @@ export class Robot {
     });
   }
 
+  #pendingLog: string | null = null;
+
+  /** The motion governor: every pose goes through it (replaced when a calibration brings new measured ranges). */
+  get governor(): MotionGovernor {
+    return this.#governor;
+  }
+
+  /**
+   * Starts using a new calibration: the governor is rebuilt with its measured ranges (and must still allow the
+   * neutral pose), it is saved, and the servos follow the governor again. Returns why not, if it cannot be used.
+   */
+  useCalibration(calibration: Calibration): string | null {
+    let governor: MotionGovernor;
+    try {
+      governor = new MotionGovernor(undefined, limitsFor(calibration), NEUTRAL);
+    } catch (error) {
+      return `Peeqo's normal pose does not fit inside the ranges you marked (${error instanceof Error ? error.message : String(error)}). Check the marks and start over.`;
+    }
+    this.#governor = governor;
+    this.animator.resetFrom(governor.output.pose);
+    this.config.update({ calibration });
+    this.servos.setCalibration(calibration);
+    this.calibrating = false;
+    return null;
+  }
+
   /** Called when someone holds a button for setup mode (the network module takes it from there). */
   onSetupRequested: (() => void) | null = null;
   /** Called when someone asks where to find Peeqo (a medium press). */
@@ -251,6 +294,7 @@ export class Robot {
   }
 
   async start(): Promise<void> {
+    if (this.#pendingLog) this.log(this.#pendingLog);
     await this.brain.restore().catch((error: unknown) => this.log(`could not load memory: ${String(error)}`));
     // The hardware helper: servos, LEDs, buttons.
     const config = this.config.config;

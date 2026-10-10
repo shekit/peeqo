@@ -34,10 +34,11 @@ const calibration = new CalibrationSession({
   raw: (pulses) => robot.servos.raw(pulses),
   neutral: robot.governor.neutral,
   save: (result) => {
-    robot.config.update({ calibration: result });
-    robot.servos.setCalibration(result);
-    robot.calibrating = false;
-    robot.log(`calibration saved: channels ${result.channels.join(',')}, level ${result.levelUs.map((u) => u.toFixed(0)).join('/')} µs, ${result.usPerDeg.toFixed(2)} µs/°${result.checked ? ' (checked)' : ''}`);
+    const problem = robot.useCalibration(result);
+    if (problem) return problem;
+    const ranges = result.rangeUs ? `, ranges ${result.rangeUs.map((r) => `${r[0].toFixed(0)}–${r[1].toFixed(0)}`).join(' / ')} µs` : '';
+    robot.log(`calibration saved: channels ${result.channels.join(',')}, level ${result.levelUs.map((u) => u.toFixed(0)).join('/')} µs, ${result.usPerDeg.toFixed(2)} µs/°${result.checked ? ' (checked)' : ''}${ranges}`);
+    return null;
   },
   cancel: () => {
     robot.calibrating = false;

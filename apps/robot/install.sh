@@ -31,6 +31,17 @@ if ! have chromium && ! have chromium-browser; then
 fi
 CHROMIUM="$(command -v chromium || command -v chromium-browser)"
 
+step "Memory"
+# A Pi 3 B+ has 1 GB: the face (Chromium), the service (Node) and the wake word (Python) fit, with compressed swap
+# in memory for headroom. Raspberry Pi OS usually has swap already; if not, add zram.
+if [ -z "$(swapon --noheadings 2>/dev/null)" ]; then
+  dpkg -s zram-tools >/dev/null 2>&1 || sudo apt-get install -y zram-tools
+  printf 'ALGO=zstd\nPERCENT=50\n' | sudo tee /etc/default/zramswap >/dev/null
+  sudo systemctl enable zramswap.service >/dev/null 2>&1 || true
+  sudo systemctl restart zramswap.service 2>/dev/null || true
+fi
+free -h | head -3
+
 step "Node.js 22"
 if ! node -e 'const [a, b] = process.versions.node.split(".").map(Number); process.exit(a > 22 || (a === 22 && b >= 18) ? 0 : 1)' 2>/dev/null; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
