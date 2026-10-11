@@ -95,7 +95,7 @@ the servos. The servo driver is set up exactly as the 2019 one was, so 1500 µs 
 
 After calibration, the motion governor drives the servos. Peeqo stands with its arms level, its head moves are sized
 to fill the room your marks leave (they were written for the 3D model's smaller room: on the dev kit they play about
-twice as big, keeping a quarter of the room spare), and your marks are its only limits on where the arms go:
+2.5 times as big, keeping a tenth of the room spare), and your marks are its only limits on where the arms go:
 - **The governor plans inside them,** 1.5° in from each mark. Beyond that it only keeps to the neck's geometry (no leg
   pulled straight), a box on tilts, and its speed caps. It doesn't use the 3D model's collision tables on the robot:
   they put the arms' holders just below level, but the dev kit's arms move freely about 85° either way.

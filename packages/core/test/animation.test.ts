@@ -266,18 +266,19 @@ describe('HeadAnimator', () => {
   });
 
   it('sizes gestures to the neck’s room: as written for the CAD’s, bigger with more, and scaled exactly', () => {
+    // Written using about three quarters of the CAD's room: a tenth spare is a little bigger than written.
     const cad = gestureSize(neutral, DEFAULT_SAFETY_LIMITS, undefined, DEFAULT_CLEARANCE);
-    expect(cad).toBeGreaterThanOrEqual(0.9);
-    expect(cad).toBeLessThanOrEqual(1.1);
-    // Without the CAD's collision tables, around its home pose (arms level), there is about twice the room, and at
-    // that size every gesture still keeps a quarter of it spare.
+    expect(cad).toBeGreaterThanOrEqual(1.05);
+    expect(cad).toBeLessThanOrEqual(1.3);
+    // Without the CAD's collision tables, around its home pose (arms level), there is more than twice the room, and
+    // at that size every gesture still keeps a tenth of it spare.
     const home: Pose = { pitchDeg: 0, rollDeg: 0, heaveMm: 0 };
     const size = gestureSize(home, DEFAULT_SAFETY_LIMITS);
-    expect(size).toBeGreaterThan(1.8);
+    expect(size).toBeGreaterThan(2.2);
     for (const name of HEAD_ANIMATION_NAMES) {
       const clip = HEAD_ANIMATIONS.get(name)!;
       for (let t = 0; t <= clip.duration; t += 0.01) {
-        const o = clip.at(t).map((v) => (v * size * 4) / 3);
+        const o = clip.at(t).map((v) => v * size * 1.1);
         expect(checkPose({ pitchDeg: o[0]!, rollDeg: o[1]!, heaveMm: o[2]! }, undefined, DEFAULT_SAFETY_LIMITS, null).ok, `${name} at ${t}`).toBe(true);
       }
     }

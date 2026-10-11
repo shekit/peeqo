@@ -216,7 +216,7 @@ describe('the robot (no hardware) and its web server', () => {
     expect(robot.animator.size).toBeLessThan(0.5);
     const wide = { ...base, rangeUs: [[600, 2400], [600, 2400], [600, 2400]] as const };
     expect(robot.useCalibration(wide)).toBeNull();
-    expect(robot.animator.size).toBeGreaterThan(1.8);
+    expect(robot.animator.size).toBeGreaterThan(2.2);
   });
 
   it('talks, and calibrates only from the resting pulse', async () => {

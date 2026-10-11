@@ -283,12 +283,13 @@ export class HeadAnimator {
 
 /**
  * How big the gestures can be on a neck (HeadAnimator.setSize): the largest size at which every gesture, every
- * 20 ms, still keeps the headroom it was written with (a quarter of the room left over, for the idle layer and each
- * play's variation) inside these limits around this neutral pose. About 1 for the CAD's room around the simulator's
- * neutral (what they were written for); more on a neck with more room. At most 4.
+ * 20 ms, still fits inside these limits around this neutral pose with a tenth of the room to spare (for each play's
+ * variation, up to 8%, and the idle layer underneath). The gestures were written using about three quarters of the
+ * CAD's room around the simulator's neutral, so this is a little over 1 there; more on a neck with more room. At
+ * most 4.
  */
 export function gestureSize(neutral: Pose, limits: SafetyLimits, geometry: PlatformGeometry = DEFAULT_GEOMETRY, clearance: ClearanceModel | null = null): number {
-  const HEADROOM = 4 / 3;
+  const HEADROOM = 1.1;
   const frames: Offset[] = [];
   for (const name of HEAD_ANIMATION_NAMES) {
     const clip = HEAD_ANIMATIONS.get(name)!;
