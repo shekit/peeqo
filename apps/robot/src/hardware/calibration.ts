@@ -32,6 +32,8 @@ export const RANGE_MARGIN_DEG = 1.5;
 export const MIN_RANGE_US = 60;
 
 export const SERVO_NAMES: Triple<string> = ['front', "Peeqo's left", "Peeqo's right"];
+/** Each arm's number on the dev kit's board ("Servo 1" to "Servo 3"), by servo: 1 the front, 2 Peeqo's right, 3 its left. */
+export const BOARD_NUMBERS: Triple<number> = [1, 3, 2];
 
 /** Where the 2019 software put every servo at start-up and after every animation, on this very robot. */
 export const REST_US = 1500;

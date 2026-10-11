@@ -1,5 +1,6 @@
 import { DEG_TO_RAD, solveFk, type Pose, type ServoIndex, type Triple } from '@peeqo/core';
 import {
+  BOARD_NUMBERS,
   HORN_RANGE_DEG,
   PRIOR_CALIBRATION,
   RANGE_MARGIN_DEG,
@@ -22,8 +23,9 @@ import { RAW_RANGE_US } from './servoOutput.ts';
  * own, and the range is measured with the whole head moving together.
  *
  * 1. identify: each channel wiggles its arm a little (±1.3°) and they say which arm moved.
- * 2. arms, for each arm in turn: they press + once and say whether it went up or down, then nudge it (a little, on
- *    its own) until it points level. That gives each servo's direction and level pulse.
+ * 2. arms, for each arm in turn (in the order the board numbers them): they press + once and say whether it went up
+ *    or down, then nudge it (a little, on its own) until it points level. That gives each servo's direction and level
+ *    pulse.
  * 3. range: the whole head moves up and down, staying level (all three arms always at the same angle, stepped by
  *    half a degree, so the steps are as small at the top as at the bottom). They lower it until something is just
  *    about to touch and mark it, then raise it until it is as high as it should go and mark it. Each servo's pulses
@@ -105,6 +107,8 @@ export const SWEEP_DEG = [-8, 65] as const;
 export const MIN_SWEEP_DEG = 20;
 /** The tilt check. */
 export const CHECK_TILT_DEG = 3;
+/** The order the arms are set up in: as the board numbers them. */
+const ARM_ORDER = ([0, 1, 2] as const).slice().sort((a, b) => BOARD_NUMBERS[a] - BOARD_NUMBERS[b]) as ServoIndex[];
 /** The most the level step may correct, in all: more means the arms were not levelled (start over instead). */
 export const MAX_TRIM = { pitchDeg: 3, rollDeg: 3, heaveMm: 1.5 } as const;
 
@@ -214,7 +218,7 @@ export class CalibrationSession {
       return;
     }
     this.#step = 'arms';
-    this.#servo = 0;
+    this.#servo = ARM_ORDER[0]!;
     this.#armPhase = 'direction';
   }
 
@@ -256,8 +260,9 @@ export class CalibrationSession {
   armLevel(): void {
     if (this.#step !== 'arms' || this.#armPhase !== 'level') return;
     this.#levelUs[this.#servo] = this.#pulses[this.#channelOf(this.#servo)]!;
-    if (this.#servo < 2) {
-      this.#servo = (this.#servo + 1) as ServoIndex;
+    const next = ARM_ORDER[ARM_ORDER.indexOf(this.#servo) + 1];
+    if (next !== undefined) {
+      this.#servo = next;
       this.#armPhase = 'direction';
       return;
     }
@@ -483,7 +488,7 @@ export class CalibrationSession {
       const outside = ranges ? horns.findIndex((h, s) => h < ranges[s as ServoIndex][0] || h > ranges[s as ServoIndex][1]) : -1;
       if (ranges && outside >= 0) {
         const r = ranges[outside as ServoIndex];
-        this.#message = `That needs ${SERVO_NAMES[outside as ServoIndex]} arm at ${horns[outside as ServoIndex].toFixed(1)}°, outside its measured range (${r[0].toFixed(1)}° to ${r[1].toFixed(1)}° with the margin).`;
+        this.#message = `That needs the ${SERVO_NAMES[outside as ServoIndex]} arm (${BOARD_NUMBERS[outside as ServoIndex]}) at ${horns[outside as ServoIndex].toFixed(1)}°, outside its measured range (${r[0].toFixed(1)}° to ${r[1].toFixed(1)}° with the margin).`;
         return false;
       }
     }

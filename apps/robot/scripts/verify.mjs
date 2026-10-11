@@ -125,7 +125,7 @@ try {
   const state = () => panel.evaluate(() => fetch('/api/state').then((r) => r.json()));
   await click('Start calibration');
   await card.getByText('Channel 1 of 3').waitFor();
-  for (const arm of ['Front', 'Peeqo’s left', 'Peeqo’s right']) {
+  for (const arm of ['1 · Front', '2 · Peeqo’s right', '3 · Peeqo’s left']) {
     await click('Wiggle');
     await panel.waitForTimeout(120);
     await click(arm);

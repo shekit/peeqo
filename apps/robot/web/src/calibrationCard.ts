@@ -20,8 +20,12 @@ export interface CalibrationView {
   message: string | null;
 }
 
-const ARMS = ['the front arm (under the face)', 'the arm on Peeqo’s left', 'the arm on Peeqo’s right'];
-const ARM_BUTTONS = ['Front', 'Peeqo’s left', 'Peeqo’s right'];
+/** The arms, by servo (the service's order), numbered as on the dev kit's board ("Servo 1" to "Servo 3"). */
+const ARMS = ['the front arm (1, under the face)', 'the arm on Peeqo’s left (3)', 'the arm on Peeqo’s right (2)'];
+const ARM_BUTTONS = ['1 · Front', '3 · Peeqo’s left', '2 · Peeqo’s right'];
+const BOARD_NUMBERS = [1, 3, 2];
+/** The servos in the board's order. */
+const BOARD_ORDER = [0, 2, 1] as const;
 
 /** A top view of the three arms, so "Peeqo's left" is not confused with yours. */
 function armsDiagram(highlight: number | null): HTMLElement {
@@ -38,18 +42,18 @@ function armsDiagram(highlight: number | null): HTMLElement {
   add('circle', { cx: 0, cy: 0, r: 40, fill: '#f4f5f7', stroke: '#c8cdd5' });
   add('text', { x: 0, y: -46, 'text-anchor': 'middle', 'font-size': 9, fill: '#667085' }, 'face (front)');
   // Seen from above with the face at the top: servo 0 at the front, 1 at Peeqo's left (the page's lower left: its
-  // left is your right when you face it), 2 at its right.
+  // left is your right when you face it), 2 at its right; each labelled with its number on the board.
   [-90, 150, 30].forEach((deg, servo) => {
     const x = Math.cos((deg * Math.PI) / 180) * 28;
     const y = Math.sin((deg * Math.PI) / 180) * 28;
     add('circle', { cx: x, cy: y, r: 9, fill: highlight === servo ? '#2563eb' : '#fff', stroke: '#2563eb' });
-    add('text', { x, y: y + 3, 'text-anchor': 'middle', 'font-size': 8, fill: highlight === servo ? '#fff' : '#2563eb' }, String(servo + 1));
+    add('text', { x, y: y + 3, 'text-anchor': 'middle', 'font-size': 8, fill: highlight === servo ? '#fff' : '#2563eb' }, String(BOARD_NUMBERS[servo]));
   });
   return el(
     'div',
     { style: 'display: grid; justify-items: center; gap: 2px; max-width: 170px' },
     svg as unknown as Node,
-    el('span', { class: 'muted small', style: 'text-align: center; font-size: 11px', text: 'From above, face at the top. 2 is Peeqo’s left, 3 its right (as you face it: your right, your left).' }),
+    el('span', { class: 'muted small', style: 'text-align: center; font-size: 11px', text: 'From above, face at the top, numbered as on the board. 2 is Peeqo’s right, 3 its left (as you face it: your left, your right).' }),
   );
 }
 
@@ -84,7 +88,7 @@ export function calibrationCard(card: HTMLElement): (view: CalibrationView, cali
         parts.push(
           el('p', { text: `Channel ${view.channel + 1} of 3: press Wiggle, watch the arms, then tell Peeqo which one moved.` }),
           el('div', { class: 'row' }, button('Wiggle', 'wiggle', {}, 'primary'), armsDiagram(null)),
-          el('div', { class: 'row' }, ...ARM_BUTTONS.map((label, servo) => Object.assign(button(label, 'identified', { servo }), { disabled: taken.has(servo as 0 | 1 | 2) }))),
+          el('div', { class: 'row' }, ...BOARD_ORDER.map((servo) => Object.assign(button(ARM_BUTTONS[servo]!, 'identified', { servo }), { disabled: taken.has(servo) }))),
         );
         break;
       }

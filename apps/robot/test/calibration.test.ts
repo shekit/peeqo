@@ -89,10 +89,10 @@ describe('the guided calibration', () => {
     }
     expect(session.view().channelServo).toEqual([1, 2, 0]);
 
-    // 2. Each arm: which way does + go, then level it by eye (to within a quarter of a degree), a little on its own.
-    for (let s = 0; s < 3; s++) {
-      const servo = s as ServoIndex;
-      expect(session.view().armPhase).toBe('direction');
+    // 2. Each arm, in the board's order (front, Peeqo's right, its left): which way does + go, then level it by eye (to
+    //    within a quarter of a degree), a little on its own.
+    for (const servo of [0, 2, 1] as const) {
+      expect(session.view()).toMatchObject({ servo, armPhase: 'direction' });
       session.nudge(-5); // nothing moves before the + test
       const before = trueHorn(servo, last());
       session.probe();
