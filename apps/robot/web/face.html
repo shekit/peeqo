@@ -23,6 +23,17 @@
         width: min(100vw, calc(100vh * 800 / 480));
         aspect-ratio: 800 / 480;
       }
+      /* A screen mounted turned (?rotate=90, 180 or 270: degrees clockwise): the face turned to match. */
+      .stage[data-turn] {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%) rotate(calc(var(--turn) * 1deg));
+      }
+      .stage[data-turn='90'],
+      .stage[data-turn='270'] {
+        width: min(100vh, calc(100vw * 800 / 480));
+      }
       canvas {
         display: block;
         width: 100%;
@@ -73,7 +84,14 @@
     </div>
     <script type="module">
       import { startFace } from './src/faceView.ts';
-      const fps = Number(new URLSearchParams(location.search).get('fps')) || undefined;
+      const params = new URLSearchParams(location.search);
+      const fps = Number(params.get('fps')) || undefined;
+      const turn = params.get('rotate');
+      if (turn === '90' || turn === '180' || turn === '270') {
+        const stage = document.querySelector('.stage');
+        stage.dataset.turn = turn;
+        stage.style.setProperty('--turn', turn);
+      }
       startFace(document.getElementById('face'), document.getElementById('screen'), { fps });
     </script>
   </body>

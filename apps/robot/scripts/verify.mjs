@@ -59,6 +59,16 @@ try {
   check('setup: the face shows how to join, with a QR code', (await face.locator('#screen svg').count()) === 1);
   await shot(face, '1-face-setup');
 
+  // The dev kit's screen is 480×800 on its side: turned, the face fills it.
+  const turned = await context.newPage();
+  watch(turned, 'turned face');
+  await turned.setViewportSize({ width: 480, height: 800 });
+  await turned.goto(`${base}/face?rotate=90`);
+  const box = await turned.locator('.stage').boundingBox();
+  check('face: turned for a screen on its side, it fills the screen', box && Math.abs(box.x) < 1 && Math.abs(box.y) < 1 && Math.abs(box.width - 480) < 1 && Math.abs(box.height - 800) < 1, JSON.stringify(box));
+  await shot(turned, '1-face-turned');
+  await turned.close();
+
   // (fetch will not send another Host; a phone asking captive.apple.com arrives here with that Host.)
   const probe = await new Promise((resolve, reject) =>
     http.get({ host: 'localhost', port, path: '/hotspot-detect.html', headers: { Host: 'captive.apple.com' } }, (res) => resolve({ status: res.statusCode, location: res.headers.location })).on('error', reject),
