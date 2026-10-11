@@ -4,8 +4,6 @@ import type { HardwareOutputs } from './link.ts';
 
 /** How fast the calibration tool's moves (and the first move after start-up) go: about 13° of horn a second. */
 export const RAW_RATE_US_PER_S = 150;
-/** Horn angles accepted in normal use, whatever asks for them: a last line of defence (the collision tables keep the horns within about 1°–62°). */
-export const HORN_GUARD_DEG = [0.5, 65] as const;
 /** The fastest a servo may be asked to turn in normal use (its own top speed). */
 const MAX_SERVO_DEG_PER_S = 600;
 /** How often pulses go to the servo board. */
@@ -97,18 +95,19 @@ export class ServoOutput {
   /** Normal use: horn angles (degrees, servo order) from the motion governor. */
   horns(hornDeg: Triple): void {
     const calibration = this.#calibration;
-    if (!calibration) {
+    // The last line of defence: nothing outside the measured ranges (the marks made when calibrating), whatever asks.
+    const range = calibration?.rangeUs;
+    if (!calibration || !range) {
       this.#fault = 'not calibrated: the servos stay where they are';
       return;
     }
-    const bad = hornDeg.find((h) => !(h >= HORN_GUARD_DEG[0] && h <= HORN_GUARD_DEG[1]));
+    const bad = hornDeg.find((h) => !Number.isFinite(h));
     if (bad !== undefined) {
-      this.#fault = `refused a horn angle of ${Number.isFinite(bad) ? bad.toFixed(1) : String(bad)}°: holding still`;
+      this.#fault = `refused a horn angle of ${String(bad)}°: holding still`;
       return;
     }
     const perServo: Triple = [0, 1, 2].map((s) => pulseForHorn(calibration, s as 0 | 1 | 2, hornDeg[s as 0 | 1 | 2])) as unknown as Triple;
-    const range = calibration.rangeUs;
-    const outside = range ? perServo.findIndex((us, s) => us < range[s as 0 | 1 | 2][0] || us > range[s as 0 | 1 | 2][1]) : -1;
+    const outside = perServo.findIndex((us, s) => us < range[s as 0 | 1 | 2][0] || us > range[s as 0 | 1 | 2][1]);
     if (outside >= 0) {
       // Holding everything still keeps the head where it is; moving the others alone would put it somewhere unplanned.
       this.#fault = `refused ${perServo[outside]!.toFixed(0)} µs for servo ${outside}: outside its measured range, holding still`;

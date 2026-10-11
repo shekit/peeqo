@@ -166,7 +166,7 @@ describe('the robot (no hardware) and its web server', () => {
 
   it('keeps everything behind the PIN, refuses other sites, and locks out guessing', async () => {
     expect(robot.governor.limits).toBe(ROBOT_LIMITS);
-    expect(robot.governor.neutral).toEqual({ pitchDeg: 0, rollDeg: 0, heaveMm: 3.2 });
+    expect(robot.governor.neutral).toEqual({ pitchDeg: 0, rollDeg: 0, heaveMm: 0 }); // arms level
     expect((await fetch(`${base}/api/state`)).status).toBe(401);
     // Before a PIN exists, the setup endpoint takes one.
     expect((await post('/api/setup', { pin: '24' })).status).toBe(400);
@@ -198,8 +198,10 @@ describe('the robot (no hardware) and its web server', () => {
 
   it('takes a calibration with measured ranges into the governor, and refuses ranges that leave no room for its normal pose', () => {
     const base = { version: 1 as const, channels: [1, 0, 2] as const, directions: [-1, -1, -1] as const, levelUs: [1530, 1530, 1530] as const, usPerDeg: 2060 / 180, checked: true };
-    // Every arm can only reach 10° above level: its neutral pose (27°) is out of reach.
-    const tight = { ...base, rangeUs: [[1400, 1560], [1400, 1560], [1400, 1560]] as const };
+    // Without measured ranges, no.
+    expect(robot.useCalibration(base)).toMatch(/no measured ranges/);
+    // Every arm only goes from 2.6° to 37.6° above level: its neutral pose (level) is out of reach.
+    const tight = { ...base, rangeUs: [[1100, 1500], [1100, 1500], [1100, 1500]] as const };
     expect(robot.useCalibration(tight)).toMatch(/does not fit inside the ranges you marked/);
     expect(robot.governor.limits.hornRangesDeg).toBeUndefined();
     // A real range: the governor holds each servo inside it, a margin in from the marks.

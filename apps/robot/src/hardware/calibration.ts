@@ -57,12 +57,6 @@ export const PRIOR_CALIBRATION: Calibration = Object.freeze<Calibration>({
   checked: false,
 });
 
-/**
- * Horn angles the real robot keeps to (the motion governor's limits on the robot, and calibration's pose moves): off
- * the servo holders, which the horns near at about +1°, with room for calibration error; and below the neck's top.
- */
-export const HORN_RANGE_DEG = [5, 55] as const;
-
 /** Bounds a saved calibration must fall within (anything else is a damaged file, not a robot). */
 const US_PER_DEG_RANGE = [8, 15] as const;
 

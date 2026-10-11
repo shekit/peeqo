@@ -68,7 +68,9 @@ The robot runs `apps/robot`: the same brain, character and governor as the simul
   - Then the head is levelled with a phone level and the scale checked with a 3° tilt.
   - The servos stay limp until this is done.
   - The measured ranges become hard limits: the governor plans 1.5° inside them, and the driver never goes outside
-    them. On the robot, the governor also keeps every horn between 5° and 55°.
+    them. On the robot they are the only limits on where the arms go, and Peeqo stands with its arms level (the CAD's
+    collision tables, which the simulator uses, put the arms' holders just below level, but the real arms move freely
+    about 85° either way).
 - **Still to check on the hardware:**
   - the screen's resolution and rotation;
   - the audio devices;

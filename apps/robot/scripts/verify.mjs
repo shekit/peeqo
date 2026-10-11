@@ -138,13 +138,13 @@ try {
     await click('It’s level');
     await panel.waitForTimeout(150);
   }
-  // The range, with the whole head: down 1.5°, then up to 53.5°.
+  // The range, with the whole head: down 10° (room to tilt below level, where Peeqo stands), then up to 45°.
   await card.getByRole('button', { name: 'Mark lowest', exact: true }).waitFor();
-  await click('▼ down', 3);
-  await card.getByText(/Arms at -1\.5°/).waitFor();
+  await click('▼▼', 4);
+  await card.getByText(/Arms at -10\.0°/).waitFor();
   await click('Mark lowest');
   await click('▲▲', 22);
-  await card.getByText(/Arms at 53\.5°/).waitFor();
+  await card.getByText(/Arms at 45\.0°/).waitFor();
   await shot(panel, '4-calibration-range');
   await click('Mark highest');
   await panel.waitForTimeout(150);

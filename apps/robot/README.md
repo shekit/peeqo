@@ -84,18 +84,20 @@ about 10 minutes.
      room for Peeqo's normal height.
 
    Each servo's pulses at those two points become its range.
-4. **Level:** Peeqo rises to its normal height. Put your phone flat on its head with a level app open and tap until
-   it reads 0°.
-5. **Check:** Peeqo tilts back 3°. Type what the level reads; this corrects the scale.
+4. **Level:** Peeqo goes to its normal height, arms level (1500 µs). Put your phone flat on its head with a level app
+   open and tap until it reads 0° (optional).
+5. **Check:** Peeqo tilts back 3°. Type what the level reads; this corrects the scale (optional).
 6. **Save.**
 
 You set the limits: calibration has none of its own, only the servos' travel (500–2500 µs). Every move is a small,
 slow step you ask for, so stop before anything touches. It starts from 1500 µs, where the 2019 software always left
 the servos. The servo driver is set up exactly as the 2019 one was, so 1500 µs means the same thing.
 
-After calibration, the motion governor drives the servos, and the marks are hard limits:
-- **The governor plans inside them,** 1.5° in from each mark. On the robot it also keeps every horn between 5° and
-  55°.
+After calibration, the motion governor drives the servos. Peeqo stands with its arms level, and your marks are its
+only limits on where the arms go:
+- **The governor plans inside them,** 1.5° in from each mark. Beyond that it only keeps to the neck's geometry (no leg
+  pulled straight), a box on tilts, and its speed caps. It doesn't use the 3D model's collision tables on the robot:
+  they put the arms' holders just below level, but the dev kit's arms move freely about 85° either way.
 - **The servo driver never sends a pulse outside them.** If anything ever asked it to, it holds still instead.
 
 ## On the robot

@@ -1,7 +1,6 @@
 import { DEG_TO_RAD, solveFk, type Pose, type ServoIndex, type Triple } from '@peeqo/core';
 import {
   BOARD_NUMBERS,
-  HORN_RANGE_DEG,
   PRIOR_CALIBRATION,
   RANGE_MARGIN_DEG,
   REST_US,
@@ -425,7 +424,7 @@ export class CalibrationSession {
 
   /**
    * Moves to a pose with the working calibration (the level and check steps, near Peeqo's normal pose), if allowed:
-   * inside the horn range Peeqo moves in and the marks. Says why not, and returns false, if not (nothing moves then).
+   * inside the marks. Says why not, and returns false, if not (nothing moves then).
    */
   #sendPose(pose: Pose): boolean {
     const working = this.#working;
@@ -438,11 +437,6 @@ export class CalibrationSession {
       return false;
     }
     const pulses = channelPulses(working, horns.map((h, s) => pulseForHorn(working, s as ServoIndex, h)) as unknown as Triple);
-    const [lo, hi] = HORN_RANGE_DEG;
-    if (horns.some((h) => h < lo || h > hi)) {
-      this.#message = `That is outside the range Peeqo moves in (arms between ${lo}° and ${hi}° above level).`;
-      return false;
-    }
     if (pulses.some((us) => us < SERVO_TRAVEL_US[0] || us > SERVO_TRAVEL_US[1])) {
       this.#message = END_OF_TRAVEL;
       return false;

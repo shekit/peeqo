@@ -16,7 +16,7 @@ import {
   type Calibration,
 } from '../src/hardware/calibration.ts';
 import { HardwareLink } from '../src/hardware/link.ts';
-import { HORN_GUARD_DEG, RAW_RATE_US_PER_S, ServoOutput } from '../src/hardware/servoOutput.ts';
+import { RAW_RATE_US_PER_S, ServoOutput } from '../src/hardware/servoOutput.ts';
 
 const SCRIPT = fileURLToPath(new URL('../python/hardware.py', import.meta.url));
 
@@ -132,19 +132,24 @@ describe('ServoOutput', () => {
     expect(out.state.mode).toBe('off');
   });
 
-  it('refuses poses until calibrated, and horn angles outside the guard, holding still', () => {
+  it('refuses poses until calibrated with measured ranges, and anything outside them, holding still', () => {
     const { link, sent } = fakeLink();
     const out = new ServoOutput(link, null);
     out.horns([20, 20, 20]);
     expect(out.state.fault).toMatch(/not calibrated/);
+    out.setCalibration(PRIOR_CALIBRATION); // (no measured ranges)
+    out.horns([20, 20, 20]);
+    expect(out.state.fault).toMatch(/not calibrated/);
     out.update(0.02);
     expect(sent).toEqual([]);
-    out.setCalibration(PRIOR_CALIBRATION);
+    const calibration: Calibration = { ...PRIOR_CALIBRATION, rangeUs: [[600, 2400], [600, 2400], [600, 2400]] };
+    out.setCalibration(calibration);
     out.horns([20, 20, 20]);
     for (let i = 0; i < 300; i++) out.update(0.02);
     const settled = sent.at(-1)!;
-    expect(settled).toEqual(channelPulses(PRIOR_CALIBRATION, [20, 20, 20].map((h) => Math.round(pulseForHorn(PRIOR_CALIBRATION, 0, h) * 10) / 10) as unknown as Triple));
-    for (const bad of [HORN_GUARD_DEG[1] + 1, -10, Number.NaN]) {
+    expect(settled).toEqual(channelPulses(calibration, [20, 20, 20].map((h) => Math.round(pulseForHorn(calibration, 0, h) * 10) / 10) as unknown as Triple));
+    // 85° up is 557 µs, past the top of the range; −80° is 2446 µs, past its bottom.
+    for (const bad of [85, -80, Number.NaN]) {
       out.horns([20, bad, 20]);
       expect(out.state.fault).toMatch(/refused/);
     }
@@ -174,7 +179,8 @@ describe('ServoOutput', () => {
 
   it('eases into the first pose from rest, then follows the governor at full speed', () => {
     const { link, sent } = fakeLink();
-    const out = new ServoOutput(link, PRIOR_CALIBRATION);
+    const calibration: Calibration = { ...PRIOR_CALIBRATION, rangeUs: [[600, 2400], [600, 2400], [600, 2400]] };
+    const out = new ServoOutput(link, calibration);
     const governor = new MotionGovernor();
     out.horns(governor.output.hornDeg);
     out.update(0.02);
@@ -187,7 +193,7 @@ describe('ServoOutput', () => {
       const o = governor.step(0.02);
       out.horns(o.hornDeg);
       out.update(0.02);
-      const expected = channelPulses(PRIOR_CALIBRATION, o.hornDeg.map((h, s) => pulseForHorn(PRIOR_CALIBRATION, s as 0 | 1 | 2, h)) as unknown as Triple);
+      const expected = channelPulses(calibration, o.hornDeg.map((h, s) => pulseForHorn(calibration, s as 0 | 1 | 2, h)) as unknown as Triple);
       worst = Math.max(worst, ...expected.map((us, c) => Math.abs(us - sent.at(-1)![c]!)));
     }
     expect(worst).toBeLessThan(0.11); // no lag beyond the 0.1 µs rounding

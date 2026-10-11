@@ -17,7 +17,7 @@ import {
   type SavedConversation,
 } from '@peeqo/brain';
 import { Character, Life } from '@peeqo/character';
-import { DEFAULT_SAFETY_LIMITS, DotstarStrip, HeadAnimator, LedAnimator, MotionGovernor, findNeutralPose, type SafetyLimits } from '@peeqo/core';
+import { DEFAULT_SAFETY_LIMITS, DotstarStrip, HeadAnimator, LedAnimator, MotionGovernor, type Pose, type SafetyLimits } from '@peeqo/core';
 import { WakeWordDetector, wakeWordReady } from '@peeqo/wakeword';
 import { MIC_CHUNK, Microphone } from './audio/microphone.ts';
 import { PREROLL_CHUNKS, UtteranceRecorder, WAKE_PREROLL_CHUNKS } from './audio/recorder.ts';
@@ -27,25 +27,31 @@ import { ConfigStore, readFileOrNull, writeFileSafely } from './config.ts';
 import { MirroredFace, type FaceScreen } from './face/mirroredFace.ts';
 import { RobotBody } from './face/robotBody.ts';
 import { apa102Frame } from './hardware/apa102.ts';
-import { HORN_RANGE_DEG, hornRanges, type Calibration } from './hardware/calibration.ts';
+import { hornRanges, type Calibration } from './hardware/calibration.ts';
 import { HardwareLink, type HardwareOutputs, type HardwareStatus } from './hardware/link.ts';
 import { ServoOutput, type ServoState } from './hardware/servoOutput.ts';
 
 /**
- * The real robot's limits: the simulator's, keeping more room at the edges for calibration error (arms levelled by
- * eye are good to a few degrees). No horn goes below 5° (the CAD tables already keep them off their servo holders,
- * which they near at about +1°) or above 55° (the neck's top is near 65°), and the head stays between 1 and 5.4 mm
- * (it reaches 0.1–6.2 mm). Gestures stay within 70% of the neck's range, so they are hardly touched by this.
+ * The real robot's limits: none of its own on where the arms go. Each servo's range is what was marked when
+ * calibrating (the governor keeps a margin inside it); beyond that only the neck's geometry (no leg pulled straight,
+ * no rod end tilted onto its lugs), a box on tilts, and the speed caps. The CAD's collision tables are not used on the
+ * robot: they put the horns' holders just below level, but the dev kit's arms move freely about 85° either way.
  */
-export const ROBOT_LIMITS: SafetyLimits = Object.freeze({ ...DEFAULT_SAFETY_LIMITS, hornMinDeg: HORN_RANGE_DEG[0], hornMaxDeg: HORN_RANGE_DEG[1], minHeaveMm: 1, maxHeaveMm: 5.4 });
-/** The simulator's neutral pose (level, 3.2 mm up: the most room to move), which gestures are designed around. */
-const NEUTRAL = findNeutralPose();
+export const ROBOT_LIMITS: SafetyLimits = DEFAULT_SAFETY_LIMITS;
+/**
+ * Peeqo stands with its arms level: 1500 µs, the middle of their travel, where the 2019 software kept them. (The
+ * simulator stands higher, in the middle of what the CAD allows.)
+ */
+export const NEUTRAL: Pose = Object.freeze({ pitchDeg: 0, rollDeg: 0, heaveMm: 0 });
 
-/** The robot's limits with a calibration's measured ranges (if it has them) for each servo. */
-export function limitsFor(calibration: Calibration | null): SafetyLimits {
-  const ranges = calibration ? hornRanges(calibration) : null;
-  return ranges ? Object.freeze({ ...ROBOT_LIMITS, hornRangesDeg: ranges }) : ROBOT_LIMITS;
+/** The robot's limits with a calibration's measured ranges for each servo; null for a calibration without them. */
+export function limitsFor(calibration: Calibration): SafetyLimits | null {
+  const ranges = hornRanges(calibration);
+  return ranges ? Object.freeze({ ...ROBOT_LIMITS, hornRangesDeg: ranges }) : null;
 }
+
+/** The governor for some limits (on the robot: no CAD collision tables, see ROBOT_LIMITS). Throws if the neutral pose breaks them. */
+const governorFor = (limits: SafetyLimits) => new MotionGovernor(undefined, limits, NEUTRAL, null);
 
 const STEP_S = 0.01;
 const MAX_STEPS_PER_TICK = 10;
@@ -149,17 +155,21 @@ export class Robot {
     const paths = this.config.paths;
     const seed = () => (Math.random() * 2 ** 32) >>> 0;
     this.face = new MirroredFace({ seed: seed() });
-    // The saved calibration's measured ranges become the governor's limits. If they no longer allow the neutral pose
-    // (an edited file), the servos are not driven at all until Peeqo is calibrated again.
+    // The saved calibration's measured ranges become the governor's limits. Without them, or if they no longer allow
+    // the neutral pose (an edited file), the servos are not driven at all until Peeqo is calibrated again.
     let calibration = this.config.config.calibration;
-    let governor: MotionGovernor;
-    try {
-      governor = new MotionGovernor(undefined, limitsFor(calibration), NEUTRAL);
-    } catch (error) {
-      governor = new MotionGovernor(undefined, ROBOT_LIMITS, NEUTRAL);
-      calibration = null;
-      this.#pendingLog = `the saved calibration's ranges do not allow the neutral pose (${error instanceof Error ? error.message : String(error)}): calibrate again`;
+    let governor: MotionGovernor | null = null;
+    if (calibration) {
+      try {
+        const limits = limitsFor(calibration);
+        if (!limits) throw new Error('it has no measured ranges');
+        governor = governorFor(limits);
+      } catch (error) {
+        calibration = null;
+        this.#pendingLog = `the saved calibration cannot be used (${error instanceof Error ? error.message : String(error)}): calibrate again`;
+      }
     }
+    governor ??= governorFor(ROBOT_LIMITS);
     this.#governor = governor;
     this.animator = new HeadAnimator(governor.neutral, { seed: seed() });
     this.leds = new LedAnimator(this.strip, { seed: seed() });
@@ -248,9 +258,11 @@ export class Robot {
    * neutral pose), it is saved, and the servos follow the governor again. Returns why not, if it cannot be used.
    */
   useCalibration(calibration: Calibration): string | null {
+    const limits = limitsFor(calibration);
+    if (!limits) return 'This calibration has no measured ranges. Start over.';
     let governor: MotionGovernor;
     try {
-      governor = new MotionGovernor(undefined, limitsFor(calibration), NEUTRAL);
+      governor = governorFor(limits);
     } catch (error) {
       return `Peeqo's normal pose does not fit inside the ranges you marked (${error instanceof Error ? error.message : String(error)}). Check the marks and start over.`;
     }
