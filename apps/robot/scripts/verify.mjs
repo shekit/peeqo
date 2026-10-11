@@ -161,6 +161,16 @@ try {
   check('calibration: saved, with the measured ranges', st.robot.servos.calibrated && st.calibration.step === 'off' && st.logs.some((l) => /calibration saved: .* ranges /.test(l)));
   await shot(panel, '5-panel');
 
+  // Expressions: a click plays it on Peeqo, and the panel marks it.
+  const expressions = panel.locator('section.card', { hasText: 'Head moves' });
+  await expressions.getByRole('button', { name: 'happy', exact: true }).click();
+  await expressions.locator('button.active', { hasText: 'happy' }).waitFor({ timeout: 3000 });
+  await expressions.getByRole('button', { name: 'nod', exact: true }).click();
+  await panel.waitForTimeout(300);
+  st = await state();
+  check('expressions: a click plays it on Peeqo, and the panel marks it', st.robot.character.move === 'nod' && (await expressions.locator('button.active').count()) >= 1);
+  await shot(panel, '6-expressions');
+
   // Buttons (pretend ones on a laptop): a tap listens (no microphone here, and it says so).
   await panel.click('text=Tap');
   await panel.waitForFunction(() => /no microphone to listen with/.test(document.body.innerText), null, { timeout: 5000 });

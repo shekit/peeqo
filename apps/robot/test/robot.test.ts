@@ -223,5 +223,23 @@ describe('the robot (no hardware) and its web server', () => {
     robot.calibrating = true;
     robot.servos.raw([REST_US, REST_US, REST_US]);
     expect(robot.servos.state.mode).toBe('raw');
+    robot.calibrating = false;
+  });
+
+  it('plays expressions, head moves and light patterns from the panel, and nothing it does not know', async () => {
+    expect((await fetch(`${base}/api/expressions`)).status).toBe(401);
+    const list = (await (await fetch(`${base}/api/expressions`, { headers: { Cookie: session } })).json()) as Record<string, { name: string; description: string }[]>;
+    expect([list.expressions!.length, list.moves!.length, list.lights!.length]).toEqual([23, 16, 12]);
+    expect(list.expressions!.find((e) => e.name === 'happy')?.description).toBeTruthy();
+    expect((await post('/api/play', { kind: 'expression', name: 'happy' }, { Cookie: session })).status).toBe(200);
+    expect(robot.character.expression).toBe('happy');
+    expect((await post('/api/play', { kind: 'move', name: 'nod' }, { Cookie: session })).status).toBe(200);
+    expect(robot.animator.playing).toBe('nod');
+    expect((await post('/api/play', { kind: 'lights', name: 'rainbow' }, { Cookie: session })).status).toBe(200);
+    expect(robot.state().character.lights).toBe('rainbow');
+    for (const bad of [{ kind: 'expression', name: 'nod' }, { kind: 'move', name: 'rm -rf' }, { kind: 'sound', name: 'happy' }, {}]) {
+      expect((await post('/api/play', bad, { Cookie: session })).status).toBe(400);
+    }
+    expect((await post('/api/play', { kind: 'expression', name: 'happy' })).status).toBe(401);
   });
 });

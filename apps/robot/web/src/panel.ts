@@ -1,12 +1,13 @@
 import { api, el } from './dom.ts';
 import { startFace } from './faceView.ts';
 import { calibrationCard, type CalibrationView } from './calibrationCard.ts';
+import { expressionsCard } from './expressionsCard.ts';
 import './style.css';
 
 interface PanelState {
   robot: {
     name: string;
-    character: { state: string; expression: string | null };
+    character: { state: string; expression: string | null; move: string | null; lights: string | null };
     brain: { model: string; live: boolean; gifs: boolean; voice: boolean };
     hardware: { servos: boolean; leds: boolean; buttons: number[]; fake: boolean } | null;
     servos: { mode: string; pulsesUs: number[] | null; calibrated: boolean; fault: string | null };
@@ -136,6 +137,8 @@ function dashboard(info: Info): void {
   const log = el('pre', { style: 'max-height: 260px; overflow: auto; font-size: 12px; margin: 0; white-space: pre-wrap' });
   const calibration = el('section', { class: 'card' });
   const calibrate = calibrationCard(calibration);
+  const expressions = el('section', { class: 'card wide' });
+  const markPlaying = expressionsCard(expressions);
 
   app.replaceChildren(
     el('header', { class: 'top' }, el('h1', { text: info.name }), faceLink, el('span', { class: 'grow' }), signOut),
@@ -145,6 +148,7 @@ function dashboard(info: Info): void {
       el('section', { class: 'card' }, el('h2', { text: 'Face' }), el('div', { style: 'position: relative' }, canvas, overlay), el('div', { style: 'margin-top: 8px' }, chips)),
       el('section', { class: 'card' }, el('h2', { text: 'Talk' }), transcript, sayForm, el('div', { class: 'row', style: 'margin-top: 8px' }, listen)),
       el('section', { class: 'card' }, el('h2', { text: 'What Peeqo remembers' }), memoryList, el('div', { class: 'row', style: 'margin-top: 10px' }, clearChat, forgetAll), el('h2', { text: 'Timers', style: 'margin-top: 16px' }), timersList),
+      expressions,
       calibration,
       el(
         'section',
@@ -213,6 +217,7 @@ function dashboard(info: Info): void {
     }
     timersList.replaceChildren(...(r.timers.length > 0 ? r.timers.map((t) => el('li', { text: `${t.label} (${t.kind}) in ${Math.max(0, Math.round(t.inMs / 1000))} s` })) : [el('li', { class: 'muted', text: 'None.' })]));
     calibrate(s.calibration, r.servos.calibrated);
+    markPlaying({ expression: r.character.expression, move: r.character.move, lights: r.character.lights });
   };
 
   let retry = 500;

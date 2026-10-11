@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import path from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { isExpressionName } from '@peeqo/character';
+import { isHeadAnimationName, isLedPatternName } from '@peeqo/core';
 import { readFileOrNull, validPin, writeFileSafely } from '../config.ts';
 import type { FaceMessage, FaceReply } from '../face/mirroredFace.ts';
 import type { CalibrationSession } from '../hardware/calibrationSession.ts';
@@ -17,6 +19,8 @@ import type { Robot } from '../robot.ts';
  *   GET  /api/info                name, whether setup is open, whether a PIN is set, whether this browser is in
  *   POST /api/login {pin}         a session cookie (5 wrong PINs: wait 5 minutes)
  *   GET  /api/state               everything the panel shows
+ *   GET  /api/expressions         what /api/play can play: expressions, head moves, light patterns
+ *   POST /api/play {kind, name}   plays one (kind: expression, move or lights)
  *   POST /api/say, /api/listen, /api/settings, /api/memory/forget, /api/chat/clear, /api/calibration, /api/power
  *   GET/POST /api/setup           the setup page (only while setting up, or before a PIN exists)
  *   WS   /ws/face                 face commands (this robot's own screen, or a signed-in panel)
@@ -174,9 +178,18 @@ export class RobotServer {
     // Everything below needs the PIN.
     if (!this.#authed(req)) return json(res, 401, { error: 'Sign in with the PIN' });
     if (pathname === '/api/state' && req.method === 'GET') return json(res, 200, this.#state());
+    if (pathname === '/api/expressions' && req.method === 'GET') return json(res, 200, robot.repertoire());
     if (req.method !== 'POST') return json(res, 404, { error: 'Unknown API route' });
     const body = await readJson(req);
     switch (pathname) {
+      case '/api/play': {
+        const name = typeof body.name === 'string' ? body.name : '';
+        if (body.kind === 'expression' && isExpressionName(name)) robot.express(name);
+        else if (body.kind === 'move' && isHeadAnimationName(name)) robot.move(name);
+        else if (body.kind === 'lights' && isLedPatternName(name)) robot.lights(name);
+        else return json(res, 400, { error: 'Unknown expression, head move or light pattern' });
+        return json(res, 200, { ok: true });
+      }
       case '/api/say':
         if (typeof body.text === 'string') robot.say(body.text);
         return json(res, 200, { ok: true });

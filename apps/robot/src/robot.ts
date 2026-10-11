@@ -16,8 +16,22 @@ import {
   type ChatModel,
   type SavedConversation,
 } from '@peeqo/brain';
-import { Character, Life } from '@peeqo/character';
-import { DEFAULT_SAFETY_LIMITS, DotstarStrip, HeadAnimator, LedAnimator, MotionGovernor, type Pose, type SafetyLimits } from '@peeqo/core';
+import { Character, EXPRESSION_NAMES, Life, expressionSpec, type ExpressionName } from '@peeqo/character';
+import {
+  DEFAULT_SAFETY_LIMITS,
+  DotstarStrip,
+  HEAD_ANIMATIONS,
+  HEAD_ANIMATION_NAMES,
+  HeadAnimator,
+  LED_PATTERN_NAMES,
+  LedAnimator,
+  MotionGovernor,
+  describeLedPattern,
+  type HeadAnimationName,
+  type LedPatternName,
+  type Pose,
+  type SafetyLimits,
+} from '@peeqo/core';
 import { WakeWordDetector, wakeWordReady } from '@peeqo/wakeword';
 import { MIC_CHUNK, Microphone } from './audio/microphone.ts';
 import { PREROLL_CHUNKS, UtteranceRecorder, WAKE_PREROLL_CHUNKS } from './audio/recorder.ts';
@@ -80,9 +94,16 @@ export interface TranscriptLine {
   readonly text: string;
 }
 
+/** Something the panel's Expressions card can play, and what it does. */
+export interface Playable {
+  readonly name: string;
+  readonly description: string;
+}
+
 export interface RobotState {
   readonly name: string;
-  readonly character: { readonly state: string; readonly expression: string | null };
+  /** Its state, the expression playing, the head move playing, and the light pattern showing. */
+  readonly character: { readonly state: string; readonly expression: string | null; readonly move: string | null; readonly lights: string | null };
   readonly brain: { readonly model: string; readonly live: boolean; readonly gifs: boolean; readonly voice: boolean };
   readonly hardware: HardwareStatus | null;
   readonly servos: ServoState;
@@ -375,6 +396,32 @@ export class Robot {
     this.life.poke(performance.now());
   }
 
+  /** What the panel's Expressions card can play: Peeqo's expressions, head moves and light patterns. */
+  repertoire(): { expressions: Playable[]; moves: Playable[]; lights: Playable[] } {
+    return {
+      expressions: EXPRESSION_NAMES.map((name) => ({ name, description: expressionSpec(name).description })),
+      moves: HEAD_ANIMATION_NAMES.map((name) => ({ name, description: HEAD_ANIMATIONS.get(name)?.description ?? '' })),
+      lights: LED_PATTERN_NAMES.map((name) => ({ name, description: describeLedPattern(name) })),
+    };
+  }
+
+  /** Plays one of Peeqo's expressions (face, head, lights and sound together), as if it had chosen it. */
+  express(name: ExpressionName): void {
+    this.poke();
+    this.character.express(name);
+  }
+
+  /** Plays a head move on its own (through the motion governor, like every move). */
+  move(name: HeadAnimationName): void {
+    this.poke();
+    this.animator.play(name);
+  }
+
+  /** Shows a light pattern on the ring. */
+  lights(name: LedPatternName): void {
+    this.leds.play(name);
+  }
+
   /** Shows a screen over the face (setup instructions, an address), or clears it. */
   showScreen(screen: FaceScreen | null): void {
     this.face.setScreen(screen);
@@ -424,7 +471,7 @@ export class Robot {
     const config = this.config.config;
     return {
       name: config.name,
-      character: { state: this.character.state, expression: this.character.expression },
+      character: { state: this.character.state, expression: this.character.expression, move: this.animator.playing, lights: this.leds.active ? this.leds.pattern : null },
       brain: { model: this.brain.modelName, live: this.#live !== null, gifs: config.keys.klipy !== null, voice: this.brain.voice },
       hardware: this.#hardware,
       servos: this.servos.state,

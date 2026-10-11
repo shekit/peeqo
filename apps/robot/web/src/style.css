@@ -58,6 +58,28 @@ header.top h1 {
   letter-spacing: 0.04em;
   color: var(--muted);
 }
+.card.wide {
+  grid-column: 1 / -1;
+}
+.card h3 {
+  margin: 14px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.buttons button {
+  padding: 5px 10px;
+}
+button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
 .row {
   display: flex;
   flex-wrap: wrap;
