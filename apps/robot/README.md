@@ -117,7 +117,8 @@ to fill the room your marks leave (they were written for the 3D model's smaller 
   - The face draws at 30 frames a second.
   - Chromium runs in its low-memory mode.
   - The installer adds compressed swap if there's none.
-  - The wake word detector leaves out openWakeWord's training libraries, using about 120 MB instead of 200 MB.
+  - The wake word detector (microWakeWord) uses about 6% of one core and the speech detector only runs while there
+    is sound.
   - Measured on a Mac: the service uses about 130 MB, and its motion loop under 3% of one Pi core.
   - The face screen is the part to watch on the real board.
 - **Microphone and speaker:** the board's WM8960 sound chip. The installer turns it on (`dtoverlay=wm8960-soundcard`;

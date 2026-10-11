@@ -1,8 +1,6 @@
-# What openWakeWord 0.6.0 needs to run its ONNX models. setup.mjs installs openwakeword itself with --no-deps: its
-# own list adds tflite-runtime on Linux, which only .tflite models use and which has no wheels for current Pythons
-# (it would stop the setup on the Pi), and scikit-learn and scipy, which only its training helper uses (the detector
-# keeps that from loading).
-onnxruntime>=1.20
+# The wake word and speech detectors (microWakeWord and its voice-activity detector, from the Open Home
+# Foundation). Both bring their own TensorFlow Lite library and the built-in wake word models, so there is nothing to
+# compile or download. Wheels exist for Linux aarch64 (the Pi), x86-64 and macOS.
+pymicro-wakeword>=2.5,<3
+pymicro-vad>=2.1,<3
 numpy>=1.26
-tqdm>=4
-requests>=2

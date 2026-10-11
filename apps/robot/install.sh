@@ -96,7 +96,7 @@ if [ ${#groups_wanted[@]} -gt 0 ]; then sudo usermod -aG "$(IFS=,; echo "${group
 step "Peeqo's software"
 cd "$DIR"
 npm install --omit=dev --no-audit --no-fund
-if [ ! -x packages/wakeword/.venv/bin/python ]; then npm run setup -w @peeqo/wakeword; fi
+npm run setup -w @peeqo/wakeword  # (only does anything when its requirements have changed)
 
 step "Services"
 fill() { sed -e "s|@USER@|$ME|g" -e "s|@DIR@|$DIR|g" -e "s|@CHROMIUM@|$CHROMIUM|g" -e "s|@GROUPS@|${groups_wanted[*]:-}|g" "$1"; }

@@ -12,12 +12,11 @@ export type WakeWordEvent =
   | { readonly type: 'error'; readonly message: string };
 
 export interface WakeWordOptions {
-  /** Wake words: pre-trained openWakeWord names (default hey_jarvis) or model files. */
+  /**
+   * Wake words: microWakeWord's built-in ones (hey_jarvis, the default; okay_nabu, hey_mycroft, alexa) or a trained
+   * model's .json file (with its .tflite beside it). Each model brings its own cut-off.
+   */
   readonly words?: readonly string[];
-  /** Score a wake word must exceed (default 0.5). */
-  readonly threshold?: number;
-  /** 80 ms chunks in a row it must stay above the threshold (default 3: look-alike phrases only spike for one). */
-  readonly patience?: number;
   /** Python to run (default: the environment made by `npm run setup -w @peeqo/wakeword`). */
   readonly python?: string;
   /** The detector script (default: python/detector.py in this package; the robot keeps its own copy). */
@@ -37,8 +36,8 @@ export function wakeWordReady(python = DEFAULT_PYTHON): boolean {
 }
 
 /**
- * openWakeWord in a helper process: write audio with write(), hear about wake words and speech through the callback.
- * start() resolves once the models are loaded.
+ * microWakeWord in a helper process: write audio with write(), hear about wake words and speech through the
+ * callback. start() resolves once the models are loaded.
  */
 /** Audio waiting for the detector, beyond which more is dropped: half a second (on top of the pipe's own buffer). */
 export const MAX_QUEUED_BYTES = 16000;
@@ -67,7 +66,6 @@ export class WakeWordDetector {
     }
     const args = [this.#options.script ?? SCRIPT];
     for (const word of this.#options.words ?? ['hey_jarvis']) args.push('--word', word);
-    args.push('--threshold', String(this.#options.threshold ?? 0.5), '--patience', String(this.#options.patience ?? 3));
     const child = spawn(python, args, { stdio: ['pipe', 'pipe', 'pipe'] });
     this.#child = child;
     this.#stderr = '';

@@ -20,7 +20,7 @@ npm run verify:sim                   # drives the built simulator in Chrome
 | `packages/face` | The screen face: expressive eyes (and the 2019 eyes), drawn on a canvas. |
 | `packages/character` | Peeqo as a character: states, expressions, synthesized sounds, and its life between conversations. |
 | `packages/brain` | The mind: OpenRouter model, Klipy GIFs, persona, conversation loop, memory (`memory.md`, kept by the model), tools (time, timers, reminders, weather), and an offline stand-in. Peeqo answers with GIFs and captions; a voice is optional. |
-| `packages/wakeword` | Wake word and speech detection: openWakeWord in a Python helper process that Node feeds audio to. |
+| `packages/wakeword` | Wake word and speech detection: microWakeWord and its voice-activity detector in a Python helper process that Node feeds audio to. |
 | `apps/sim` | The browser simulator, and the local API that holds the keys. See [its README](../apps/sim/README.md). |
 | `apps/robot` | Peeqo on its Raspberry Pi: the service that drives the real servos, LEDs, screen, mic and buttons, the web panel, phone setup and guided calibration. See [its README](../apps/robot/README.md). |
 
