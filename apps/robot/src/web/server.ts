@@ -257,11 +257,17 @@ export class RobotServer {
       case 'nudge':
         session.nudge(n(body.steps));
         break;
+      case 'raise':
+        session.raise(n(body.steps));
+        break;
       case 'markLowest':
         session.markLowest();
         break;
       case 'markHighest':
         session.markHighest();
+        break;
+      case 'remark':
+        session.remark();
         break;
       case 'armLevel':
         session.armLevel();

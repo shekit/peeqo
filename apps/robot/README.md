@@ -75,14 +75,19 @@ about 10 minutes.
 1. **Which arm is which:** each channel wiggles its arm by about 1°, and you click the arm that moved.
 2. **Each arm:**
    - **Direction:** press + once and say whether the arm went up or down.
-   - **Lowest:** nudge it down, half a degree at a time, until it's just about to touch anything, then mark it.
-   - **Highest:** nudge it up until it's as high as it should go, just short of binding, then mark it.
-   - **Level:** nudge it, within your marks, until it points level.
-3. **Level:** Peeqo rises to its normal height. Put your phone flat on its head with a level app open and tap until
+   - **Level:** nudge it until it points level. An arm only moves a little on its own: the arms are linked through
+     the head, so one arm alone tilts it.
+3. **Range, all together:** the whole head moves up and down, staying level. Each ▲/▼ moves all three arms by
+   0.5°.
+   - **Lowest:** lower it until something is just about to touch, then mark it.
+   - **Highest:** raise it until it's as high as it should go, just short of binding, then mark it. It must leave
+     room for Peeqo's normal height.
+
+   Each servo's pulses at those two points become its range.
+4. **Level:** Peeqo rises to its normal height. Put your phone flat on its head with a level app open and tap until
    it reads 0°.
-4. **Check:** Peeqo tilts back 3°. Type what the level reads; this corrects the scale.
-5. **Save:** if Peeqo's normal pose doesn't fit inside the marks, it refuses to save and says which arm is the
-   problem.
+5. **Check:** Peeqo tilts back 3°. Type what the level reads; this corrects the scale.
+6. **Save.**
 
 Every calibration move is slow and starts from 1500 µs, where the 2019 software always left the servos. The servo
 driver is set up exactly as the 2019 one was, so 1500 µs means the same thing.

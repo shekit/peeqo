@@ -1,12 +1,17 @@
 import { api, el } from './dom.ts';
 
 export interface CalibrationView {
-  step: 'off' | 'identify' | 'arms' | 'level' | 'check' | 'done';
+  step: 'off' | 'identify' | 'arms' | 'range' | 'level' | 'check' | 'done';
   channel: number;
   channelServo: (0 | 1 | 2 | null)[];
   servo: 0 | 1 | 2;
-  armPhase: 'direction' | 'lowest' | 'highest' | 'level';
+  armPhase: 'direction' | 'level';
   directions: (1 | -1 | null)[];
+  rangePhase: 'lowest' | 'highest';
+  sweepDeg: number;
+  heightMm: number | null;
+  lowestDeg: number | null;
+  highestDeg: number | null;
   rangeUs: ([number, number] | null)[];
   levelUs: (number | null)[];
   pulsesUs: number[];
@@ -70,7 +75,7 @@ export function calibrationCard(card: HTMLElement): (view: CalibrationView, cali
       case 'off':
         parts.push(
           el('p', { text: calibrated ? 'Peeqo is calibrated. Do it again if its head does not sit level, or after taking the neck apart.' : 'Peeqo’s servos stay still until it is calibrated. It takes about 10 minutes, once.' }),
-          el('p', { class: 'muted small', text: 'Take off the cloth cover so you can see the three servo arms at the base, and keep fingers clear: Peeqo makes small, slow moves. For each arm you will mark how low and how high it can safely go; Peeqo never goes outside those marks.' }),
+          el('p', { class: 'muted small', text: 'Take off the cloth cover so you can see the three servo arms at the base, and keep fingers clear: Peeqo makes small, slow moves. You will move the whole head down and up and mark how low and how high it can safely go; Peeqo never goes outside those marks.' }),
           button(calibrated ? 'Calibrate again' : 'Start calibration', 'start', {}, 'primary'),
         );
         break;
@@ -84,38 +89,35 @@ export function calibrationCard(card: HTMLElement): (view: CalibrationView, cali
         break;
       }
       case 'arms': {
-        const nudges = (fine: string, coarse: string) =>
-          el('div', { class: 'row' }, button(`▲ ${fine}`, 'nudge', { steps: 1 }), button('▲▲', 'nudge', { steps: 5 }), button(`▼ ${coarse}`, 'nudge', { steps: -1 }), button('▼▼', 'nudge', { steps: -5 }));
         parts.push(el('div', { class: 'row' }, armsDiagram(view.servo), el('p', { class: 'grow', text: `Now ${ARMS[view.servo]}.` })));
-        switch (view.armPhase) {
-          case 'direction':
-            parts.push(el('p', { text: 'Press “+ once” and watch that arm.' }), el('div', { class: 'row' }, button('+ once', 'probe', {}, 'primary'), el('span', { class: 'muted', text: 'Did it go…' }), button('Up', 'plusMoved', { up: true }), button('Down', 'plusMoved', { up: false })));
-            break;
-          case 'lowest':
-            parts.push(
-              el('p', { text: 'Move it down, a step at a time, until it is just about to touch anything (its holder, the base, a screw). Stop before it touches, then mark it.' }),
-              el('p', { class: 'muted small', text: 'Each ▲/▼ is about half a degree; ▲▲/▼▼ are five. Use single steps near the end.' }),
-              nudges('up', 'down'),
-              el('div', { class: 'row', style: 'margin-top: 8px' }, button('Mark lowest', 'markLowest', {}, 'primary')),
-            );
-            break;
-          case 'highest':
-            parts.push(
-              el('p', { text: 'Now move it up until it is as high as it should go: stop just before it binds, strains or touches anything, then mark it.' }),
-              nudges('up', 'down'),
-              el('div', { class: 'row', style: 'margin-top: 8px' }, button('Mark highest', 'markHighest', {}, 'primary')),
-            );
-            break;
-          case 'level': {
-            const range = view.rangeUs[view.servo];
-            parts.push(
-              el('p', { text: 'Move it until it points straight out, level (it stays between your marks).' }),
-              range ? el('p', { class: 'muted small', text: `Marked: ${Math.round(range[0])}–${Math.round(range[1])} µs` }) : null,
-              el('div', { class: 'row' }, button('▲ up', 'nudge', { steps: 1 }), button('▲▲', 'nudge', { steps: 5 }), button('▼ down', 'nudge', { steps: -1 }), button('▼▼', 'nudge', { steps: -5 }), button('It’s level', 'armLevel', {}, 'primary')),
-            );
-            break;
-          }
+        if (view.armPhase === 'direction') {
+          parts.push(el('p', { text: 'Press “+ once” and watch that arm.' }), el('div', { class: 'row' }, button('+ once', 'probe', {}, 'primary'), el('span', { class: 'muted', text: 'Did it go…' }), button('Up', 'plusMoved', { up: true }), button('Down', 'plusMoved', { up: false })));
+        } else {
+          parts.push(
+            el('p', { text: 'Move it until it points straight out, level. Stop before it touches anything.' }),
+            el('p', { class: 'muted small', text: 'It only moves a little on its own: the arms are linked, so one arm alone tilts the head.' }),
+            el('div', { class: 'row' }, button('▲ up', 'nudge', { steps: 1 }), button('▲▲', 'nudge', { steps: 5 }), button('▼ down', 'nudge', { steps: -1 }), button('▼▼', 'nudge', { steps: -5 }), button('It’s level', 'armLevel', {}, 'primary')),
+          );
         }
+        break;
+      }
+      case 'range': {
+        const lowest = view.rangePhase === 'lowest';
+        parts.push(
+          el('p', {
+            text: lowest
+              ? 'Now the whole head moves, staying level. Lower it until something is just about to touch (watch all three arms and the head), then mark it.'
+              : 'Now raise it until it is as high as it should go: stop just before anything binds or a leg is fully straight, then mark it.',
+          }),
+          el('p', { class: 'muted small', text: `Arms at ${view.sweepDeg.toFixed(1)}°${view.heightMm !== null ? ` (head ${view.heightMm.toFixed(1)} mm up)` : ''}${view.lowestDeg !== null ? ` · lowest mark ${view.lowestDeg.toFixed(1)}°` : ''}. Each ▲/▼ moves the arms 0.5°; ▲▲/▼▼ move them 2.5°. Use single steps near the ends.` }),
+          el('div', { class: 'row' }, button('▲ up', 'raise', { steps: 1 }), button('▲▲', 'raise', { steps: 5 }), button('▼ down', 'raise', { steps: -1 }), button('▼▼', 'raise', { steps: -5 })),
+          el(
+            'div',
+            { class: 'row', style: 'margin-top: 8px' },
+            lowest ? button('Mark lowest', 'markLowest', {}, 'primary') : button('Mark highest', 'markHighest', {}, 'primary'),
+            lowest ? null : button('Mark the lowest again', 'remark'),
+          ),
+        );
         break;
       }
       case 'level':

@@ -62,7 +62,9 @@ The robot runs `apps/robot`: the same brain, character and governor as the simul
   laptop. The installer sets up everything else.
 - **Wi-Fi:** from a phone. Peeqo shows a QR code for its setup network when it knows no Wi-Fi.
 - **Calibration:** guided, from the panel, with the cloth off.
-  - Each arm's channel, direction, measured range (its lowest and highest safe points) and level are found by eye.
+  - Each arm's channel, direction and level are found by eye.
+  - The range is measured with the whole head moving together, staying level (the arms are linked): its lowest and
+    highest safe points give each servo's range.
   - Then the head is levelled with a phone level and the scale checked with a 3° tilt.
   - The servos stay limp until this is done.
   - The measured ranges become hard limits: the governor plans 1.5° inside them, and the driver never goes outside

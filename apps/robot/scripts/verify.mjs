@@ -1,6 +1,6 @@
 // Drives the robot's pages in Chrome against the service with fake hardware (no Pi needed), and fails on any
 // problem: the phone setup (a wrong Wi-Fi password, then the right one), signing in, talking, memory, the face
-// screen, the buttons, and the whole calibration wizard (range marks included).
+// screen, the buttons, and the whole calibration wizard (the range step included).
 //
 //   npm run build -w @peeqo/robot && npm run verify -w @peeqo/robot [-- <screenshot-dir>]
 
@@ -125,20 +125,24 @@ try {
     await card.getByRole('button', { name: '+ once', exact: true }).waitFor();
     await click('+ once');
     await click('Down');
-    await card.getByRole('button', { name: 'Mark lowest', exact: true }).waitFor();
-    await click('▼ down', 3);
-    await click('Mark lowest');
-    await click('▲▲', 25);
-    await click('Mark highest');
     await card.getByRole('button', { name: 'It’s level', exact: true }).waitFor();
     if (s === 0) await shot(panel, '3-calibration-arm');
-    await click('▼▼', 24);
-    await click('▼ down', 2);
+    await click('▲ up', 4); // back up the + test's 20 µs: level at rest
     await click('It’s level');
     await panel.waitForTimeout(150);
   }
+  // The range, with the whole head: down 1.5°, then up to 53.5°.
+  await card.getByRole('button', { name: 'Mark lowest', exact: true }).waitFor();
+  await click('▼ down', 3);
+  await card.getByText(/Arms at -1\.5°/).waitFor();
+  await click('Mark lowest');
+  await click('▲▲', 22);
+  await card.getByText(/Arms at 53\.5°/).waitFor();
+  await shot(panel, '4-calibration-range');
+  await click('Mark highest');
+  await panel.waitForTimeout(150);
   let st = await state();
-  check('calibration: every arm marked, and Peeqo at its neutral pose', st.calibration.step === 'level' && st.calibration.rangeUs.every((r) => r && r[1] - r[0] > 500));
+  check('calibration: the range marked with the whole head, and Peeqo at its neutral pose', st.calibration.step === 'level' && st.calibration.rangeUs.every((r) => r && r[1] - r[0] > 600));
   await click('Tilt back');
   await click('Next: check the tilt');
   await card.locator('input[type=number]').fill('3.0');
@@ -148,7 +152,7 @@ try {
   await panel.waitForTimeout(800);
   st = await state();
   check('calibration: saved, with the measured ranges', st.robot.servos.calibrated && st.calibration.step === 'off' && st.logs.some((l) => /calibration saved: .* ranges /.test(l)));
-  await shot(panel, '4-panel');
+  await shot(panel, '5-panel');
 
   // Buttons (pretend ones on a laptop): a tap listens (no microphone here, and it says so).
   await panel.click('text=Tap');
