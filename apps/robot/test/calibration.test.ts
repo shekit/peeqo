@@ -1,8 +1,7 @@
 import { DEG_TO_RAD, solveFk, type Pose, type ServoIndex, type Triple } from '@peeqo/core';
 import { describe, expect, it } from 'vitest';
-import { PRIOR_CALIBRATION, RANGE_MARGIN_DEG, REST_US, channelPulses, hornAngles, hornForPulse, hornRanges, pulseForHorn, type Calibration } from '../src/hardware/calibration.ts';
-import { ARM_RANGE_US, CHECK_TILT_DEG, CalibrationSession, FIND_MAX_US, FIND_STEP_US, MAX_DOWN_US, MIN_SWEEP_DEG, NUDGE_US, RAISE_DEG, SWEEP_DEG } from '../src/hardware/calibrationSession.ts';
-import { RAW_RANGE_US } from '../src/hardware/servoOutput.ts';
+import { PRIOR_CALIBRATION, RANGE_MARGIN_DEG, REST_US, SERVO_TRAVEL_US, channelPulses, hornAngles, hornForPulse, hornRanges, pulseForHorn, type Calibration } from '../src/hardware/calibration.ts';
+import { CHECK_TILT_DEG, CalibrationSession, FIND_STEP_US, MIN_SWEEP_DEG, NUDGE_US } from '../src/hardware/calibrationSession.ts';
 
 const NEUTRAL: Pose = { pitchDeg: 0, rollDeg: 0, heaveMm: 3.2 };
 
@@ -180,20 +179,21 @@ describe('the guided calibration', () => {
       expect(Math.abs(real.rollDeg - pose.rollDeg)).toBeLessThan(0.2);
       expect(Math.abs(real.heaveMm - pose.heaveMm)).toBeLessThan(0.2);
     }
-    // Nothing ever went further from rest than calibration allows.
-    expect(Math.max(...sent.flat().map((us) => Math.abs(us - REST_US)))).toBeLessThanOrEqual(RAW_RANGE_US);
+    // Nothing ever went outside the servos' travel.
+    expect(sent.flat().every((us) => us >= SERVO_TRAVEL_US[0] && us <= SERVO_TRAVEL_US[1])).toBe(true);
   });
 
-  it('moves one arm only a little on its own, and the whole head only within the sweep', () => {
+  it('leaves the limits to the person: it only stops at the end of the servos’ travel', () => {
     const sent: number[][] = [];
     const session = new CalibrationSession({ raw: (p) => void sent.push([...p]), neutral: NEUTRAL, save: () => null, cancel: () => undefined });
     session.start();
-    // Finding an arm: about a degree a tap, never more than FIND_MAX_US from rest, and ▼ only back to rest.
+    // Finding an arm: about a degree a tap, as far as the travel allows, and ▼ only back to rest.
     session.move(1);
     expect(sent.at(-1)).toEqual([REST_US - FIND_STEP_US, REST_US, REST_US]);
     session.move(1000);
-    expect(sent.at(-1)![0]).toBe(REST_US - FIND_MAX_US);
-    expect(session.view().message).toMatch(/as far as it goes/);
+    expect(sent.at(-1)![0]).toBeGreaterThanOrEqual(SERVO_TRAVEL_US[0]);
+    expect(sent.at(-1)![0]).toBeLessThan(SERVO_TRAVEL_US[0] + FIND_STEP_US);
+    expect(session.view().message).toMatch(/end of the servo's travel/);
     session.move(-1000);
     expect(sent.at(-1)![0]).toBe(REST_US);
     session.move(2);
@@ -201,49 +201,46 @@ describe('the guided calibration', () => {
       if (servo > 0) session.move(2);
       session.identified(servo, true); // it went up for a smaller pulse
     }
+    // One arm: either way to the end of the travel, in whole nudges (so it comes back to rest exactly).
     session.nudge(-1000);
-    const down = sent.at(-1)![0]! - REST_US;
-    expect(down).toBeLessThanOrEqual(MAX_DOWN_US);
-    expect(down).toBeGreaterThan(MAX_DOWN_US - NUDGE_US);
-    expect(session.view().message).toMatch(/as low as one arm/);
-    session.nudge(down / NUDGE_US); // whole nudges: back to rest exactly
+    expect(sent.at(-1)![0]).toBe(SERVO_TRAVEL_US[1]);
+    expect(session.view().message).toMatch(/end of the servo's travel/);
+    session.nudge((SERVO_TRAVEL_US[1] - REST_US) / NUDGE_US);
     expect(sent.at(-1)![0]).toBe(REST_US);
     session.nudge(1000);
-    expect(sent.at(-1)![0]).toBe(REST_US - ARM_RANGE_US);
-    expect(session.view().message).toMatch(/tilt the head/);
+    expect(sent.at(-1)![0]).toBe(SERVO_TRAVEL_US[0]);
 
+    // The whole head (level at rest, 11.44 µs a degree): the travel ends 87.4° either side.
     const swept: number[][] = [];
     const range = toRange(swept);
     const from = swept.length;
     range.raise(-1000);
-    expect(range.view().sweepDeg).toBe(SWEEP_DEG[0]);
-    expect(range.view().message).toMatch(/as low as calibration goes/);
-    // Level at rest, up a smaller pulse: 61.2° up is as far from rest as calibration ever drives a servo.
+    expect(range.view().sweepDeg).toBe(-87);
+    expect(range.view().message).toMatch(/end of the servo's travel/);
     range.raise(1000);
-    expect(range.view().sweepDeg).toBe(61);
-    expect(range.view().message).toMatch(/as high as calibration goes/);
-    expect(swept.at(-1)!.every((us) => REST_US - us <= RAW_RANGE_US && REST_US - us > RAW_RANGE_US - RAISE_DEG * PRIOR_CALIBRATION.usPerDeg)).toBe(true);
+    expect(range.view().sweepDeg).toBe(87);
+    expect(swept.flat().every((us) => us >= SERVO_TRAVEL_US[0] && us <= SERVO_TRAVEL_US[1])).toBe(true);
     // Every step keeps the head level (here, with the arms alike: all three pulses the same).
     for (const p of swept.slice(from)) expect(new Set(p).size).toBe(1);
     range.raise(-1000);
     range.markLowest();
     range.raise(-5);
-    expect(range.view().sweepDeg).toBe(SWEEP_DEG[0]);
+    expect(range.view().sweepDeg).toBe(-87);
     expect(range.view().message).toMatch(/lowest point you marked/);
     range.raise(10);
     range.markHighest();
     expect(range.view().message).toMatch(new RegExp(`at least ${MIN_SWEEP_DEG}°`));
-    range.raise(50);
+    range.raise(100);
     range.markHighest();
     expect(range.view().step).toBe('range'); // neutral (arms at 27.3°) is not inside yet
     expect(range.view().message).toMatch(/normal height/);
-    range.raise(30);
+    range.raise(150);
     range.markHighest();
     expect(range.view().step).toBe('level');
-    expect(range.view()).toMatchObject({ lowestDeg: SWEEP_DEG[0], highestDeg: 37 });
+    expect(range.view()).toMatchObject({ lowestDeg: -87, highestDeg: 43 });
     for (const r of range.view().rangeUs) {
-      expect(r![0]).toBeCloseTo(REST_US - 37 * PRIOR_CALIBRATION.usPerDeg, 6);
-      expect(r![1]).toBeCloseTo(REST_US + 8 * PRIOR_CALIBRATION.usPerDeg, 6);
+      expect(r![0]).toBeCloseTo(REST_US - 43 * PRIOR_CALIBRATION.usPerDeg, 6);
+      expect(r![1]).toBeCloseTo(REST_US + 87 * PRIOR_CALIBRATION.usPerDeg, 6);
     }
   });
 
@@ -278,20 +275,21 @@ describe('the guided calibration', () => {
     expect(session.view()).toMatchObject({ channel: 1, channelServo: [1, null, null], directions: [null, 1, null] });
   });
 
-  it('caps the total level correction (more means the arms were not level)', () => {
+  it('refuses a level correction that would take an arm outside the marks (and nothing moves)', () => {
     const sent: number[][] = [];
     const session = toRange(sent);
     session.raise(-2);
     session.markLowest();
-    session.raise(120);
+    session.raise(60); // 29°: the normal height (27.3°) only just inside, with the margin
     session.markHighest();
     expect(session.view().step).toBe('level');
-    for (let i = 0; i < 12; i++) session.trim({ pitchDeg: 0.25, rollDeg: 0, heaveMm: 0 }); // 3° in all: allowed
-    expect(session.view().message).toBeNull();
     const before = sent.length;
-    session.trim({ pitchDeg: 0.25, rollDeg: 0, heaveMm: 0 });
-    expect(session.view().message).toMatch(/more correction/);
-    expect(sent.length).toBe(before); // and nothing moved
+    session.trim({ pitchDeg: 0, rollDeg: 0, heaveMm: 0.5 });
+    expect(session.view().message).toMatch(/outside the range you marked/);
+    expect(sent.length).toBe(before);
+    session.trim({ pitchDeg: 0, rollDeg: 0, heaveMm: -0.5 });
+    expect(session.view().message).toBeNull();
+    expect(sent.length).toBe(before + 1);
   });
 
   it('refuses the same arm twice, warns about arms turning different ways, and cancels cleanly', () => {

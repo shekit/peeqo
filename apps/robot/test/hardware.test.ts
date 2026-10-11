@@ -5,6 +5,7 @@ import { apa102Frame } from '../src/hardware/apa102.ts';
 import {
   PRIOR_CALIBRATION,
   REST_US,
+  SERVO_TRAVEL_US,
   channelPulses,
   hornAngles,
   hornForPulse,
@@ -15,7 +16,7 @@ import {
   type Calibration,
 } from '../src/hardware/calibration.ts';
 import { HardwareLink } from '../src/hardware/link.ts';
-import { HORN_GUARD_DEG, RAW_RANGE_US, RAW_RATE_US_PER_S, ServoOutput } from '../src/hardware/servoOutput.ts';
+import { HORN_GUARD_DEG, RAW_RATE_US_PER_S, ServoOutput } from '../src/hardware/servoOutput.ts';
 
 const SCRIPT = fileURLToPath(new URL('../python/hardware.py', import.meta.url));
 
@@ -90,7 +91,7 @@ describe('calibration', () => {
     const withRanges = { ...PRIOR_CALIBRATION, rangeUs: [[900, 1540], [910, 1530], [905, 1545]] };
     expect(parseCalibration(withRanges)).toEqual(withRanges);
     // A damaged range refuses the whole calibration (dropping just the range would lift the limits).
-    for (const rangeUs of [[[900, 1540], [910, 1530]], [[900, 1540], [910, 1530], [1500, 1520]], [[900, 1540], [910, 1530], [600, 1545]], [[900, 1540], [910, 1530], ['x', 1545]]]) {
+    for (const rangeUs of [[[900, 1540], [910, 1530]], [[900, 1540], [910, 1530], [1500, 1520]], [[900, 1540], [910, 1530], [400, 1545]], [[900, 1540], [910, 1530], ['x', 1545]]]) {
       expect(parseCalibration({ ...PRIOR_CALIBRATION, rangeUs })).toBeNull();
     }
     for (const broken of [
@@ -108,18 +109,19 @@ describe('calibration', () => {
 });
 
 describe('ServoOutput', () => {
-  it('sends nothing until told, starts the calibration tool from the resting pulse, and moves slowly within range', () => {
+  it('sends nothing until told, starts the calibration tool from the resting pulse, and moves slowly within the travel', () => {
     const { link, sent } = fakeLink();
     const out = new ServoOutput(link, null);
     out.update(0.02);
     expect(sent).toEqual([]);
-    out.raw([1500 + 1000, 1500, 1500 - 40]);
-    expect(out.target).toEqual([REST_US + RAW_RANGE_US, 1500, 1460]); // clamped
+    out.raw([1500 + 1200, 1500, 1500 - 40]);
+    const far = SERVO_TRAVEL_US[1] - REST_US;
+    expect(out.target).toEqual([SERVO_TRAVEL_US[1], 1500, 1460]); // clamped to the servo's travel
     out.update(0.02);
     // The furthest channel moves at the slow rate; the others in step with it (sent rounded to 0.1 µs).
-    expect(sent[0]).toEqual([1500 + RAW_RATE_US_PER_S * 0.02, 1500, Math.round((1500 - (RAW_RATE_US_PER_S * 0.02 * 40) / RAW_RANGE_US) * 10) / 10]);
+    expect(sent[0]).toEqual([1500 + RAW_RATE_US_PER_S * 0.02, 1500, Math.round((1500 - (RAW_RATE_US_PER_S * 0.02 * 40) / far) * 10) / 10]);
     for (let i = 0; i < 400; i++) out.update(0.02);
-    expect(sent.at(-1)).toEqual([REST_US + RAW_RANGE_US, 1500, 1460]);
+    expect(sent.at(-1)).toEqual([SERVO_TRAVEL_US[1], 1500, 1460]);
     // Never faster than the slow rate, and every channel arrives together.
     for (let i = 1; i < sent.length; i++) {
       const step = sent[i]!.map((us, c) => Math.abs(us - sent[i - 1]![c]!));

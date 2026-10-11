@@ -72,9 +72,9 @@ A button only counts once it has been seen released, so a button stuck down at s
 Calibration is done once, from the panel, with the cloth cover off so the three servo arms are visible. It takes
 about 10 minutes.
 
-1. **Which arm is which, and which way it turns:** for each plug on the servo board, tap ▲ (about 1° a tap, up to
-   10°) until you see an arm move, then say which arm it was and whether it went up or down. The arms are short, so
-   it takes a few taps to see.
+1. **Which arm is which, and which way it turns:** for each plug on the servo board, tap ▲ (about 1° a tap) until you
+   see an arm move, then say which arm it was and whether it went up or down. The arms are short, so it takes a few
+   taps to see.
 2. **Level each arm:** nudge it until it points level. An arm only moves a little on its own: the arms are linked
    through the head, so one arm alone tilts it.
 3. **Range, all together:** the whole head moves up and down, staying level. Each ▲/▼ moves all three arms by
@@ -89,8 +89,9 @@ about 10 minutes.
 5. **Check:** Peeqo tilts back 3°. Type what the level reads; this corrects the scale.
 6. **Save.**
 
-Every calibration move is slow and starts from 1500 µs, where the 2019 software always left the servos. The servo
-driver is set up exactly as the 2019 one was, so 1500 µs means the same thing.
+You set the limits: calibration has none of its own, only the servos' travel (500–2500 µs). Every move is a small,
+slow step you ask for, so stop before anything touches. It starts from 1500 µs, where the 2019 software always left
+the servos. The servo driver is set up exactly as the 2019 one was, so 1500 µs means the same thing.
 
 After calibration, the motion governor drives the servos, and the marks are hard limits:
 - **The governor plans inside them,** 1.5° in from each mark. On the robot it also keeps every horn between 5° and

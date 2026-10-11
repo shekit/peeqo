@@ -37,6 +37,11 @@ export const BOARD_NUMBERS: Triple<number> = [1, 3, 2];
 
 /** Where the 2019 software put every servo at start-up and after every animation, on this very robot. */
 export const REST_US = 1500;
+/**
+ * The servos' own travel (the standard 500–2500 µs; the 2019 software used 500–2560): nothing outside it is ever
+ * sent. Inside it, calibration leaves the limits to the person calibrating, who watches and marks them.
+ */
+export const SERVO_TRAVEL_US = [500, 2500] as const;
 
 /**
  * Before calibration, the best guess: the 2019 software's mapping (ServoSimulator/Platform.pde: servo angle = 90° −
@@ -59,7 +64,6 @@ export const PRIOR_CALIBRATION: Calibration = Object.freeze<Calibration>({
 export const HORN_RANGE_DEG = [5, 55] as const;
 
 /** Bounds a saved calibration must fall within (anything else is a damaged file, not a robot). */
-const LEVEL_US_RANGE = [1000, 2100] as const;
 const US_PER_DEG_RANGE = [8, 15] as const;
 
 /** Horn angles (degrees, servo order) for a pose. Throws for a pose the neck cannot reach. */
@@ -147,7 +151,7 @@ export function parseCalibration(value: unknown): Calibration | null {
   if (c.version !== 1) return null;
   if (!triple(channels, (x) => x === 0 || x === 1 || x === 2) || new Set(channels as number[]).size !== 3) return null;
   if (!triple(c.directions, (x) => x === 1 || x === -1)) return null;
-  if (!triple(c.levelUs, (x) => typeof x === 'number' && x >= LEVEL_US_RANGE[0] && x <= LEVEL_US_RANGE[1])) return null;
+  if (!triple(c.levelUs, (x) => typeof x === 'number' && x >= SERVO_TRAVEL_US[0] && x <= SERVO_TRAVEL_US[1])) return null;
   if (!(typeof c.usPerDeg === 'number' && c.usPerDeg >= US_PER_DEG_RANGE[0] && c.usPerDeg <= US_PER_DEG_RANGE[1])) return null;
   let rangeUs: Triple<readonly [number, number]> | undefined;
   if (c.rangeUs !== undefined) {
@@ -155,7 +159,7 @@ export function parseCalibration(value: unknown): Calibration | null {
     const ok = (r: unknown) =>
       Array.isArray(r) &&
       r.length === 2 &&
-      r.every((us) => typeof us === 'number' && Number.isFinite(us) && us >= REST_US - 700 && us <= REST_US + 700) &&
+      r.every((us) => typeof us === 'number' && Number.isFinite(us) && us >= SERVO_TRAVEL_US[0] && us <= SERVO_TRAVEL_US[1]) &&
       (r[1] as number) - (r[0] as number) >= MIN_RANGE_US;
     if (!triple(c.rangeUs, ok)) return null;
     rangeUs = (c.rangeUs as number[][]).map((r) => [r[0]!, r[1]!] as const) as unknown as Triple<readonly [number, number]>;

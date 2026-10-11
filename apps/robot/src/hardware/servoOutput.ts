@@ -1,12 +1,7 @@
 import type { Triple } from '@peeqo/core';
-import { REST_US, channelPulses, pulseForHorn, type Calibration } from './calibration.ts';
+import { REST_US, SERVO_TRAVEL_US, channelPulses, pulseForHorn, type Calibration } from './calibration.ts';
 import type { HardwareOutputs } from './link.ts';
 
-/**
- * How far from the 2019 resting pulse the calibration tool can ever drive a servo (≈60° of horn): a last guard
- * against nonsense; calibration itself keeps much closer (see calibrationSession.ts).
- */
-export const RAW_RANGE_US = 700;
 /** How fast the calibration tool's moves (and the first move after start-up) go: about 13° of horn a second. */
 export const RAW_RATE_US_PER_S = 150;
 /** Horn angles accepted in normal use, whatever asks for them: a last line of defence (the collision tables keep the horns within about 1°–62°). */
@@ -84,8 +79,8 @@ export class ServoOutput {
   }
 
   /**
-   * The calibration tool: drive channels 0–2 directly, each kept within RAW_RANGE_US of the resting pulse, moving
-   * slowly. From off, the first move starts at the resting pulse (where the 2019 software left the servos).
+   * The calibration tool: drive channels 0–2 directly, each kept within the servos' travel, moving slowly. From off,
+   * the first move starts at the resting pulse (where the 2019 software left the servos).
    */
   raw(pulsesUs: readonly number[]): void {
     if (pulsesUs.length !== SERVO_CHANNELS || pulsesUs.some((us) => !Number.isFinite(us))) {
@@ -96,7 +91,7 @@ export class ServoOutput {
     this.#start();
     this.#mode = 'raw';
     this.#slow = true;
-    this.#target = pulsesUs.map((us) => Math.min(REST_US + RAW_RANGE_US, Math.max(REST_US - RAW_RANGE_US, us)));
+    this.#target = pulsesUs.map((us) => Math.min(SERVO_TRAVEL_US[1], Math.max(SERVO_TRAVEL_US[0], us)));
   }
 
   /** Normal use: horn angles (degrees, servo order) from the motion governor. */

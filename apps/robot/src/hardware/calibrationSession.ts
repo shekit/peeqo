@@ -6,6 +6,7 @@ import {
   RANGE_MARGIN_DEG,
   REST_US,
   SERVO_NAMES,
+  SERVO_TRAVEL_US,
   channelPulses,
   hornAngles,
   hornForPulse,
@@ -15,19 +16,19 @@ import {
   trimmed,
   type Calibration,
 } from './calibration.ts';
-import { RAW_RANGE_US } from './servoOutput.ts';
 
 /**
- * The guided calibration, done with someone watching (the cloth cover off, so the three servo arms show). The arms
- * are linked through the platform, so an arm moved on its own tilts the head: arms only ever move a little on their
- * own, and the range is measured with the whole head moving together.
+ * The guided calibration, done with someone watching (the cloth cover off, so the three servo arms show). The person
+ * sets the limits: calibration has none of its own beyond the servos' travel (SERVO_TRAVEL_US). Every move is a small
+ * step they ask for, made slowly (ServoOutput), and they stop before anything touches. The arms are linked through
+ * the platform, so an arm moved on its own tilts the head: the range is measured with the whole head moving together.
  *
  * 1. identify, for each plug (channel) in turn: they tap ▲, moving its arm about 1° a tap the way the 2019 software
- *    raised it (up to 10°), until they see which arm moves; then say which arm it was and whether it went up or down.
+ *    raised it, until they see which arm moves; then say which arm it was and whether it went up or down.
  *    That gives each servo's channel and direction. (The horns are short, 7 mm: a degree is a sixth of a millimetre at
  *    the tip, so it takes a few taps to see.)
- * 2. arms, for each arm in turn (in the order the board numbers them): they nudge it (a little, on its own) until it
- *    points level. That gives each servo's level pulse.
+ * 2. arms, for each arm in turn (in the order the board numbers them): they nudge it until it points level. That gives
+ *    each servo's level pulse.
  * 3. range: the whole head moves up and down, staying level (all three arms always at the same angle, stepped by
  *    half a degree, so the steps are as small at the top as at the bottom). They lower it until something is just
  *    about to touch and mark it, then raise it until it is as high as it should go and mark it. Each servo's pulses
@@ -37,8 +38,7 @@ import { RAW_RANGE_US } from './servoOutput.ts';
  * 5. check: Peeqo tilts back 3°; they read the level, which corrects the scale (microseconds per degree).
  * 6. save.
  *
- * Every move is a raw pulse near the 2019 resting pulse (1500 µs, where the 2019 software always put the servos),
- * made slowly by ServoOutput in small steps, with someone watching.
+ * It starts from the 2019 resting pulse (1500 µs, where the 2019 software always put the servos).
  */
 export type CalibrationStep = 'off' | 'identify' | 'arms' | 'range' | 'level' | 'check' | 'done';
 /** Which end of the range is being looked for. */
@@ -89,28 +89,15 @@ export interface CalibrationDeps {
 export const FIND_STEP_US = 12;
 /** One press of + or − on a single arm. */
 export const NUDGE_US = 5;
-/** On its own, an arm may go this far below where it started (it rests near its holder): about 10°. */
-export const MAX_DOWN_US = 114;
-/** identify: and no further from rest than that (which way it goes is not known yet). */
-export const FIND_MAX_US = MAX_DOWN_US;
-/** And this far above (more on its own would tilt the head too far): about 17°. */
-export const ARM_RANGE_US = 200;
 /** One press of ▲/▼ in the range step: all three arms, by this much. */
 export const RAISE_DEG = 0.5;
-/**
- * How far the range step may move the arms, from level (the CAD's home pose): the CAD has the horns meeting their
- * holders just below level, and the neck near its top at about 62°. A little beyond both is allowed, as the real
- * robot may differ; the person watching stops it. (No servo goes further from rest than RAW_RANGE_US, either.)
- */
-export const SWEEP_DEG = [-8, 65] as const;
 /** Less room than this between the marks is a mistake in marking them (normal motion uses up to 50°). */
 export const MIN_SWEEP_DEG = 20;
 /** The tilt check. */
 export const CHECK_TILT_DEG = 3;
 /** The order the arms are set up in: as the board numbers them. */
 const ARM_ORDER = ([0, 1, 2] as const).slice().sort((a, b) => BOARD_NUMBERS[a] - BOARD_NUMBERS[b]) as ServoIndex[];
-/** The most the level step may correct, in all: more means the arms were not levelled (start over instead). */
-export const MAX_TRIM = { pitchDeg: 3, rollDeg: 3, heaveMm: 1.5 } as const;
+const END_OF_TRAVEL = "That is the end of the servo's travel.";
 
 export class CalibrationSession {
   readonly #deps: CalibrationDeps;
@@ -128,8 +115,6 @@ export class CalibrationSession {
   #rangeUs: ([number, number] | null)[] = [null, null, null];
   #pulses: number[] = [REST_US, REST_US, REST_US];
   #working: Calibration | null = null;
-  /** How far the level step has corrected so far. */
-  #trimmed = { pitchDeg: 0, rollDeg: 0, heaveMm: 0 };
   #message: string | null = null;
 
   constructor(deps: CalibrationDeps) {
@@ -177,20 +162,17 @@ export class CalibrationSession {
     this.#highestDeg = null;
     this.#rangeUs = [null, null, null];
     this.#working = null;
-    this.#trimmed = { pitchDeg: 0, rollDeg: 0, heaveMm: 0 };
     this.#message = null;
     this.#send([REST_US, REST_US, REST_US]);
   }
 
-  /** identify: moves the current plug's arm by `steps` taps (▲ +, ▼ − back toward rest), up to FIND_MAX_US from rest. */
+  /** identify: moves the current plug's arm by `steps` taps (▲ +, ▼ − back toward rest), within the servo's travel. */
   move(steps: number): void {
     if (this.#step !== 'identify' || !Number.isFinite(steps)) return;
+    const most = Math.floor((REST_US - SERVO_TRAVEL_US[0]) / FIND_STEP_US) * FIND_STEP_US;
     const wanted = this.#movedUs + Math.round(steps) * FIND_STEP_US;
-    this.#movedUs = Math.min(FIND_MAX_US, Math.max(0, wanted));
-    this.#message =
-      wanted > FIND_MAX_US
-        ? 'That is as far as it goes here. If no arm moved at all, check the servos have power: a powered arm is stiff to push.'
-        : null;
+    this.#movedUs = Math.min(most, Math.max(0, wanted));
+    this.#message = wanted > most ? END_OF_TRAVEL : null;
     this.#send(this.#pulses.map((p, c) => (c === this.#channel ? REST_US - this.#movedUs : p)));
   }
 
@@ -232,24 +214,19 @@ export class CalibrationSession {
     this.#message = null;
   }
 
-  /** arms: moves the current arm up (+) or down (−) by `steps` nudges, a little either side of where it started. */
+  /** arms: moves the current arm up (+) or down (−) by `steps` nudges, within the servo's travel. */
   nudge(steps: number): void {
     if (this.#step !== 'arms' || !Number.isFinite(steps)) return;
     const direction = this.#directions[this.#servo];
     if (direction !== 1 && direction !== -1) return;
     const channel = this.#channelOf(this.#servo);
-    // Measured upward from the resting pulse, in whole nudges (so it always comes back to rest exactly): no more than
-    // MAX_DOWN_US below it, nor ARM_RANGE_US above.
-    const lowest = -Math.floor(MAX_DOWN_US / NUDGE_US) * NUDGE_US;
-    const highest = Math.floor(ARM_RANGE_US / NUDGE_US) * NUDGE_US;
+    // Measured upward from the resting pulse, in whole nudges (so it always comes back to rest exactly).
+    const [a, b] = SERVO_TRAVEL_US.map((us) => (us - REST_US) * direction) as [number, number];
+    const lowest = Math.ceil(Math.min(a, b) / NUDGE_US) * NUDGE_US;
+    const highest = Math.floor(Math.max(a, b) / NUDGE_US) * NUDGE_US;
     const wantedUp = (this.#pulses[channel]! - REST_US) * direction + Math.round(steps) * NUDGE_US;
     const up = Math.min(highest, Math.max(lowest, wantedUp));
-    this.#message =
-      wantedUp < lowest
-        ? 'That is as low as one arm may go on its own (it is close to its holder).'
-        : wantedUp > highest
-          ? 'That is as far as one arm may go on its own (more would tilt the head too far).'
-          : null;
+    this.#message = wantedUp < lowest || wantedUp > highest ? END_OF_TRAVEL : null;
     this.#send(this.#pulses.map((p, c) => (c === channel ? REST_US + up * direction : p)));
   }
 
@@ -292,9 +269,9 @@ export class CalibrationSession {
       wanted < lowest - 1e-9
         ? this.#rangePhase === 'highest'
           ? 'That is the lowest point you marked.'
-          : 'That is as low as calibration goes.'
+          : END_OF_TRAVEL
         : wanted > top + 1e-9
-          ? 'That is as high as calibration goes.'
+          ? END_OF_TRAVEL
           : null;
   }
 
@@ -339,7 +316,7 @@ export class CalibrationSession {
     this.#working = candidate;
     this.#step = 'level';
     this.#message = null;
-    this.#sendPose(this.#deps.neutral, 'normal');
+    this.#sendPose(this.#deps.neutral);
   }
 
   /** range: forget the marks and look for the lowest point again. */
@@ -353,27 +330,19 @@ export class CalibrationSession {
   /** level: moves the head by a little (from where it is): "tilt back", "tilt to its left", "up". */
   trim(move: Pose): void {
     if ((this.#step !== 'level' && this.#step !== 'done') || !this.#working) return;
-    const limited = {
+    // One tap is a small step.
+    const step = {
       pitchDeg: clamp(move.pitchDeg, -1, 1),
       rollDeg: clamp(move.rollDeg, -1, 1),
       heaveMm: clamp(move.heaveMm, -0.5, 0.5),
     };
-    const total = {
-      pitchDeg: this.#trimmed.pitchDeg + limited.pitchDeg,
-      rollDeg: this.#trimmed.rollDeg + limited.rollDeg,
-      heaveMm: this.#trimmed.heaveMm + limited.heaveMm,
-    };
-    if (Math.abs(total.pitchDeg) > MAX_TRIM.pitchDeg || Math.abs(total.rollDeg) > MAX_TRIM.rollDeg || Math.abs(total.heaveMm) > MAX_TRIM.heaveMm) {
-      this.#message = 'That is more correction than levelling should need: the arms were probably not level. Start over and level them again.';
-      return;
-    }
     const before = this.#working;
-    this.#working = trimmed(this.#working, this.#deps.neutral, limited);
-    if (!this.#sendPose(this.#deps.neutral, 'normal')) {
-      this.#working = before; // (the measured ranges do not allow it: nothing moved)
+    this.#working = trimmed(this.#working, this.#deps.neutral, step);
+    if (!this.#sendPose(this.#deps.neutral)) {
+      this.#working = before; // (the marks do not allow it: nothing moved)
       return;
     }
-    this.#trimmed = total;
+    this.#message = null;
     this.#step = 'level';
   }
 
@@ -381,7 +350,7 @@ export class CalibrationSession {
   tilt(): void {
     if ((this.#step !== 'level' && this.#step !== 'done' && this.#step !== 'check') || !this.#working) return;
     const n = this.#deps.neutral;
-    if (this.#sendPose({ ...n, pitchDeg: n.pitchDeg + CHECK_TILT_DEG }, 'normal')) this.#step = 'check';
+    if (this.#sendPose({ ...n, pitchDeg: n.pitchDeg + CHECK_TILT_DEG })) this.#step = 'check';
   }
 
   /** check: the level's reading while tilted (relative to its reading at level). */
@@ -396,7 +365,7 @@ export class CalibrationSession {
     }
     const before = this.#working;
     this.#working = better;
-    if (!this.#sendPose(this.#deps.neutral, 'normal')) {
+    if (!this.#sendPose(this.#deps.neutral)) {
       this.#working = before;
       return;
     }
@@ -428,16 +397,13 @@ export class CalibrationSession {
     return channel;
   }
 
-  /**
-   * range: the arm angles the sweep may use, on the grid of presses: within SWEEP_DEG, and no servo further from rest
-   * than RAW_RANGE_US.
-   */
+  /** range: the arm angles the sweep may use, on the grid of presses: every servo within its travel. */
   #sweepBounds(working: Calibration): readonly [number, number] {
-    let lo: number = SWEEP_DEG[0];
-    let hi: number = SWEEP_DEG[1];
+    let lo = -Infinity;
+    let hi = Infinity;
     for (const servo of [0, 1, 2] as const) {
-      const a = hornForPulse(working, servo, REST_US - RAW_RANGE_US);
-      const b = hornForPulse(working, servo, REST_US + RAW_RANGE_US);
+      const a = hornForPulse(working, servo, SERVO_TRAVEL_US[0]);
+      const b = hornForPulse(working, servo, SERVO_TRAVEL_US[1]);
       lo = Math.max(lo, Math.min(a, b));
       hi = Math.min(hi, Math.max(a, b));
     }
@@ -449,8 +415,8 @@ export class CalibrationSession {
     const working = this.#working;
     if (!working) return false;
     const pulses = channelPulses(working, [0, 1, 2].map((s) => pulseForHorn(working, s as ServoIndex, angle)) as unknown as Triple);
-    if (pulses.some((us) => Math.abs(us - REST_US) > RAW_RANGE_US)) {
-      this.#message = 'That is further from rest than calibration allows; the arms may not have been level. Start over and check them.';
+    if (pulses.some((us) => us < SERVO_TRAVEL_US[0] || us > SERVO_TRAVEL_US[1])) {
+      this.#message = END_OF_TRAVEL;
       return false;
     }
     this.#send(pulses);
@@ -458,10 +424,10 @@ export class CalibrationSession {
   }
 
   /**
-   * Moves to a pose with the working calibration, if allowed: only inside the robot's horn range and the measured
-   * ranges. Says why not, and returns false, if it is not allowed (nothing moves then).
+   * Moves to a pose with the working calibration (the level and check steps, near Peeqo's normal pose), if allowed:
+   * inside the horn range Peeqo moves in and the marks. Says why not, and returns false, if not (nothing moves then).
    */
-  #sendPose(pose: Pose, limits: 'normal'): boolean {
+  #sendPose(pose: Pose): boolean {
     const working = this.#working;
     if (!working) return false;
     let horns: Triple;
@@ -473,18 +439,20 @@ export class CalibrationSession {
     }
     const pulses = channelPulses(working, horns.map((h, s) => pulseForHorn(working, s as ServoIndex, h)) as unknown as Triple);
     const [lo, hi] = HORN_RANGE_DEG;
-    if (horns.some((h) => h < lo || h > hi) || pulses.some((us) => Math.abs(us - REST_US) > RAW_RANGE_US)) {
-      this.#message = 'That move is outside what calibration allows; the arms may not have been level. Start over and check them.';
+    if (horns.some((h) => h < lo || h > hi)) {
+      this.#message = `That is outside the range Peeqo moves in (arms between ${lo}° and ${hi}° above level).`;
       return false;
     }
-    if (limits === 'normal') {
-      const ranges = hornRanges(working);
-      const outside = ranges ? horns.findIndex((h, s) => h < ranges[s as ServoIndex][0] || h > ranges[s as ServoIndex][1]) : -1;
-      if (ranges && outside >= 0) {
-        const r = ranges[outside as ServoIndex];
-        this.#message = `That needs the ${SERVO_NAMES[outside as ServoIndex]} arm (${BOARD_NUMBERS[outside as ServoIndex]}) at ${horns[outside as ServoIndex].toFixed(1)}°, outside its measured range (${r[0].toFixed(1)}° to ${r[1].toFixed(1)}° with the margin).`;
-        return false;
-      }
+    if (pulses.some((us) => us < SERVO_TRAVEL_US[0] || us > SERVO_TRAVEL_US[1])) {
+      this.#message = END_OF_TRAVEL;
+      return false;
+    }
+    const ranges = hornRanges(working);
+    const outside = ranges ? horns.findIndex((h, s) => h < ranges[s as ServoIndex][0] || h > ranges[s as ServoIndex][1]) : -1;
+    if (ranges && outside >= 0) {
+      const r = ranges[outside as ServoIndex];
+      this.#message = `That needs the ${SERVO_NAMES[outside as ServoIndex]} arm (${BOARD_NUMBERS[outside as ServoIndex]}) at ${horns[outside as ServoIndex].toFixed(1)}°, outside the range you marked (${r[0].toFixed(1)}° to ${r[1].toFixed(1)}° with the margin).`;
+      return false;
     }
     this.#send(pulses);
     return true;

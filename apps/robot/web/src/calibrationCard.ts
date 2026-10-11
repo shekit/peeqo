@@ -92,7 +92,7 @@ export function calibrationCard(card: HTMLElement): (view: CalibrationView, cali
           el(
             'div',
             { class: 'row' },
-            el('div', { class: 'row' }, button('▲', 'move', { steps: 1 }, 'primary'), button('▼ back', 'move', { steps: -1 }), el('span', { class: 'muted small', text: `moved ${view.movedDeg.toFixed(0)}° of 10°` })),
+            el('div', { class: 'row' }, button('▲', 'move', { steps: 1 }, 'primary'), button('▼ back', 'move', { steps: -1 }), el('span', { class: 'muted small', text: `moved ${view.movedDeg.toFixed(0)}°` })),
             armsDiagram(null),
           ),
           el('p', { text: 'Which arm moved, and which way?' }),
@@ -107,7 +107,7 @@ export function calibrationCard(card: HTMLElement): (view: CalibrationView, cali
         parts.push(
           el('div', { class: 'row' }, armsDiagram(view.servo), el('p', { class: 'grow', text: `Now ${ARMS[view.servo]}.` })),
           el('p', { text: 'Move it until it points straight out, level. Stop before it touches anything.' }),
-          el('p', { class: 'muted small', text: 'It only moves a little on its own: the arms are linked, so one arm alone tilts the head.' }),
+          el('p', { class: 'muted small', text: 'The arms are linked, so moving one alone tilts the head: only move it as far as it takes to level it.' }),
           el('div', { class: 'row' }, button('▲ up', 'nudge', { steps: 1 }), button('▲▲', 'nudge', { steps: 5 }), button('▼ down', 'nudge', { steps: -1 }), button('▼▼', 'nudge', { steps: -5 }), button('It’s level', 'armLevel', {}, 'primary')),
         );
         break;

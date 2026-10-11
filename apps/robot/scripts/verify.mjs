@@ -128,7 +128,7 @@ try {
   for (const [i, arm] of ['1 · Front', '2 · Peeqo’s right', '3 · Peeqo’s left'].entries()) {
     await card.getByText(`Plug ${i + 1} of 3`, { exact: false }).waitFor();
     await click('▲', 3);
-    await card.getByText('moved 3° of 10°').waitFor();
+    await card.getByText('moved 3°', { exact: true }).waitFor();
     if (i === 0) await shot(panel, '3-calibration-find');
     await card.getByRole('group', { name: arm }).getByRole('button', { name: 'Up', exact: true }).click();
     await panel.waitForTimeout(150);
