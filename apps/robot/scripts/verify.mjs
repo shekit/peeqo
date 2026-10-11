@@ -124,20 +124,17 @@ try {
   };
   const state = () => panel.evaluate(() => fetch('/api/state').then((r) => r.json()));
   await click('Start calibration');
-  await card.getByText('Channel 1 of 3').waitFor();
-  for (const arm of ['1 · Front', '2 · Peeqo’s right', '3 · Peeqo’s left']) {
-    await click('Wiggle');
-    await panel.waitForTimeout(120);
-    await click(arm);
-    await panel.waitForTimeout(120);
+  await card.getByText('Plug 1 of 3', { exact: false }).waitFor();
+  for (const [i, arm] of ['1 · Front', '2 · Peeqo’s right', '3 · Peeqo’s left'].entries()) {
+    await card.getByText(`Plug ${i + 1} of 3`, { exact: false }).waitFor();
+    await click('▲', 3);
+    await card.getByText('moved 3° of 10°').waitFor();
+    if (i === 0) await shot(panel, '3-calibration-find');
+    await card.getByRole('group', { name: arm }).getByRole('button', { name: 'Up', exact: true }).click();
+    await panel.waitForTimeout(150);
   }
   for (let s = 0; s < 3; s++) {
-    await card.getByRole('button', { name: '+ once', exact: true }).waitFor();
-    await click('+ once');
-    await click('Down');
     await card.getByRole('button', { name: 'It’s level', exact: true }).waitFor();
-    if (s === 0) await shot(panel, '3-calibration-arm');
-    await click('▲ up', 4); // back up the + test's 20 µs: level at rest
     await click('It’s level');
     await panel.waitForTimeout(150);
   }

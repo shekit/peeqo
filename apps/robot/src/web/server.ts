@@ -240,19 +240,16 @@ export class RobotServer {
         this.#o.robot.calibrating = true;
         session.start();
         break;
-      case 'wiggle':
-        session.wiggle();
+      case 'move':
+        session.move(n(body.steps));
         break;
       case 'identified': {
         const s = servo(body.servo);
-        if (s !== null) session.identified(s);
+        if (s !== null) session.identified(s, body.up === true);
         break;
       }
-      case 'probe':
-        session.probe();
-        break;
-      case 'plusMoved':
-        session.plusMoved(body.up === true);
+      case 'back':
+        session.back();
         break;
       case 'nudge':
         session.nudge(n(body.steps));

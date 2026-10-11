@@ -22,10 +22,12 @@ import { RAW_RANGE_US } from './servoOutput.ts';
  * are linked through the platform, so an arm moved on its own tilts the head: arms only ever move a little on their
  * own, and the range is measured with the whole head moving together.
  *
- * 1. identify: each channel wiggles its arm a little (±1.3°) and they say which arm moved.
- * 2. arms, for each arm in turn (in the order the board numbers them): they press + once and say whether it went up
- *    or down, then nudge it (a little, on its own) until it points level. That gives each servo's direction and level
- *    pulse.
+ * 1. identify, for each plug (channel) in turn: they tap ▲, moving its arm about 1° a tap the way the 2019 software
+ *    raised it (up to 10°), until they see which arm moves; then say which arm it was and whether it went up or down.
+ *    That gives each servo's channel and direction. (The horns are short, 7 mm: a degree is a sixth of a millimetre at
+ *    the tip, so it takes a few taps to see.)
+ * 2. arms, for each arm in turn (in the order the board numbers them): they nudge it (a little, on its own) until it
+ *    points level. That gives each servo's level pulse.
  * 3. range: the whole head moves up and down, staying level (all three arms always at the same angle, stepped by
  *    half a degree, so the steps are as small at the top as at the bottom). They lower it until something is just
  *    about to touch and mark it, then raise it until it is as high as it should go and mark it. Each servo's pulses
@@ -39,20 +41,18 @@ import { RAW_RANGE_US } from './servoOutput.ts';
  * made slowly by ServoOutput in small steps, with someone watching.
  */
 export type CalibrationStep = 'off' | 'identify' | 'arms' | 'range' | 'level' | 'check' | 'done';
-/** Where the current arm is in the arms step. */
-export type ArmPhase = 'direction' | 'level';
 /** Which end of the range is being looked for. */
 export type RangePhase = 'lowest' | 'highest';
 
 export interface CalibrationView {
   readonly step: CalibrationStep;
-  /** identify: the channel being wiggled (0–2). */
+  /** identify: the channel (plug) being found (0–2), and how far its arm has been moved from rest (degrees, roughly). */
   readonly channel: number;
+  readonly movedDeg: number;
   /** Which servo each channel drives (null: not yet known). */
   readonly channelServo: readonly (ServoIndex | null)[];
-  /** arms: the servo being set up, and how far it has got. */
+  /** arms: the servo being levelled. */
   readonly servo: ServoIndex;
-  readonly armPhase: ArmPhase;
   readonly directions: readonly (1 | -1 | null)[];
   readonly levelUs: readonly (number | null)[];
   /**
@@ -85,14 +85,14 @@ export interface CalibrationDeps {
   readonly cancel: () => void;
 }
 
-/** A small wiggle, both ways (direction is not known yet): about 1.3° of horn. */
-export const WIGGLE_US = 15;
+/** identify: one tap moves the plug's arm this much (about 1°), toward a smaller pulse (up, in the 2019 software). */
+export const FIND_STEP_US = 12;
 /** One press of + or − on a single arm. */
 export const NUDGE_US = 5;
-/** The direction test: one press of +. */
-export const PROBE_US = 20;
 /** On its own, an arm may go this far below where it started (it rests near its holder): about 10°. */
 export const MAX_DOWN_US = 114;
+/** identify: and no further from rest than that (which way it goes is not known yet). */
+export const FIND_MAX_US = MAX_DOWN_US;
 /** And this far above (more on its own would tilt the head too far): about 17°. */
 export const ARM_RANGE_US = 200;
 /** One press of ▲/▼ in the range step: all three arms, by this much. */
@@ -117,8 +117,8 @@ export class CalibrationSession {
   #step: CalibrationStep = 'off';
   #channel = 0;
   #channelServo: (ServoIndex | null)[] = [null, null, null];
+  #movedUs = 0;
   #servo: ServoIndex = 0;
-  #armPhase: ArmPhase = 'direction';
   #directions: (1 | -1 | null)[] = [null, null, null];
   #levelUs: (number | null)[] = [null, null, null];
   #rangePhase: RangePhase = 'lowest';
@@ -131,7 +131,6 @@ export class CalibrationSession {
   /** How far the level step has corrected so far. */
   #trimmed = { pitchDeg: 0, rollDeg: 0, heaveMm: 0 };
   #message: string | null = null;
-  #timers: ReturnType<typeof setTimeout>[] = [];
 
   constructor(deps: CalibrationDeps) {
     this.#deps = deps;
@@ -145,9 +144,9 @@ export class CalibrationSession {
     return {
       step: this.#step,
       channel: this.#channel,
+      movedDeg: Math.round((this.#movedUs / PRIOR_CALIBRATION.usPerDeg) * 10) / 10,
       channelServo: [...this.#channelServo],
       servo: this.#servo,
-      armPhase: this.#armPhase,
       directions: [...this.#directions],
       levelUs: [...this.#levelUs],
       rangePhase: this.#rangePhase,
@@ -165,12 +164,11 @@ export class CalibrationSession {
 
   /** Starts over: all servos to the resting pulse. */
   start(): void {
-    this.#clearTimers();
     this.#step = 'identify';
     this.#channel = 0;
+    this.#movedUs = 0;
     this.#channelServo = [null, null, null];
     this.#servo = 0;
-    this.#armPhase = 'direction';
     this.#directions = [null, null, null];
     this.#levelUs = [null, null, null];
     this.#rangePhase = 'lowest';
@@ -184,34 +182,35 @@ export class CalibrationSession {
     this.#send([REST_US, REST_US, REST_US]);
   }
 
-  /** identify: wiggles the current channel's arm three times. */
-  wiggle(): void {
-    if (this.#step !== 'identify') return;
-    this.#clearTimers();
-    const channel = this.#channel;
-    const at = (us: number) => this.#pulses.map((p, c) => (c === channel ? us : p));
-    const base = REST_US;
-    const pattern = [base + WIGGLE_US, base - WIGGLE_US, base + WIGGLE_US, base - WIGGLE_US, base + WIGGLE_US, base - WIGGLE_US, base];
-    pattern.forEach((us, i) =>
-      this.#timers.push(
-        setTimeout(() => {
-          // Only while still looking at this channel (an answer before the wiggle ends stops it).
-          if (this.#step === 'identify' && this.#channel === channel) this.#send(at(us));
-        }, i * 350),
-      ),
-    );
+  /** identify: moves the current plug's arm by `steps` taps (▲ +, ▼ − back toward rest), up to FIND_MAX_US from rest. */
+  move(steps: number): void {
+    if (this.#step !== 'identify' || !Number.isFinite(steps)) return;
+    const wanted = this.#movedUs + Math.round(steps) * FIND_STEP_US;
+    this.#movedUs = Math.min(FIND_MAX_US, Math.max(0, wanted));
+    this.#message =
+      wanted > FIND_MAX_US
+        ? 'That is as far as it goes here. If no arm moved at all, check the servos have power: a powered arm is stiff to push.'
+        : null;
+    this.#send(this.#pulses.map((p, c) => (c === this.#channel ? REST_US - this.#movedUs : p)));
   }
 
-  /** identify: the arm that moved. */
-  identified(servo: ServoIndex): void {
+  /** identify: the arm that moved, and which way (then it goes back to rest, and on to the next plug). */
+  identified(servo: ServoIndex, up: boolean): void {
     if (this.#step !== 'identify') return;
-    this.#clearTimers();
-    if (this.#channelServo.includes(servo)) {
-      this.#message = 'That arm was already matched to another channel. Watch closely and try again, or start over.';
+    if (this.#movedUs === 0) {
+      this.#message = 'Tap ▲ first, until you see an arm move.';
       return;
     }
-    this.#message = null;
+    if (this.#channelServo.includes(servo)) {
+      this.#message = 'That arm was already matched to another plug. Watch closely and try again, or go back.';
+      return;
+    }
     this.#channelServo[this.#channel] = servo;
+    // It moved for a smaller pulse: if that was up, the pulse falls as the arm rises.
+    this.#directions[servo] = up ? -1 : 1;
+    const known = this.#directions.filter((d): d is 1 | -1 => d !== null);
+    this.#message = new Set(known).size > 1 ? 'The arms turn different ways, which is unusual for this neck (they are mounted alike). Check before going on.' : null;
+    this.#movedUs = 0;
     this.#send(this.#pulses.map((p, c) => (c === this.#channel ? REST_US : p)));
     if (this.#channel < 2) {
       this.#channel++;
@@ -219,28 +218,23 @@ export class CalibrationSession {
     }
     this.#step = 'arms';
     this.#servo = ARM_ORDER[0]!;
-    this.#armPhase = 'direction';
   }
 
-  /** arms: one press of + on the current arm, to see which way it turns. */
-  probe(): void {
-    if (this.#step !== 'arms' || this.#armPhase !== 'direction') return;
-    const channel = this.#channelOf(this.#servo);
-    this.#send(this.#pulses.map((p, c) => (c === channel ? p + PROBE_US : p)));
-  }
-
-  /** arms: which way the + press moved the arm (then: level it). */
-  plusMoved(up: boolean): void {
-    if (this.#step !== 'arms' || this.#armPhase !== 'direction') return;
-    this.#directions[this.#servo] = up ? 1 : -1;
-    const known = this.#directions.filter((d): d is 1 | -1 => d !== null);
-    this.#message = new Set(known).size > 1 ? 'The arms turn different ways, which is unusual for this neck (they are mounted alike). Check before going on.' : null;
-    this.#armPhase = 'level';
+  /** identify: back to the previous plug, forgetting what was said about it. */
+  back(): void {
+    if (this.#step !== 'identify' || this.#channel === 0) return;
+    this.#send(this.#pulses.map((p, c) => (c === this.#channel ? REST_US : p)));
+    this.#channel--;
+    const servo = this.#channelServo[this.#channel];
+    if (servo !== null && servo !== undefined) this.#directions[servo] = null;
+    this.#channelServo[this.#channel] = null;
+    this.#movedUs = 0;
+    this.#message = null;
   }
 
   /** arms: moves the current arm up (+) or down (−) by `steps` nudges, a little either side of where it started. */
   nudge(steps: number): void {
-    if (this.#step !== 'arms' || this.#armPhase !== 'level' || !Number.isFinite(steps)) return;
+    if (this.#step !== 'arms' || !Number.isFinite(steps)) return;
     const direction = this.#directions[this.#servo];
     if (direction !== 1 && direction !== -1) return;
     const channel = this.#channelOf(this.#servo);
@@ -258,12 +252,11 @@ export class CalibrationSession {
 
   /** arms: the current arm points level (then the next arm, or after the third, the range step). */
   armLevel(): void {
-    if (this.#step !== 'arms' || this.#armPhase !== 'level') return;
+    if (this.#step !== 'arms') return;
     this.#levelUs[this.#servo] = this.#pulses[this.#channelOf(this.#servo)]!;
     const next = ARM_ORDER[ARM_ORDER.indexOf(this.#servo) + 1];
     if (next !== undefined) {
       this.#servo = next;
-      this.#armPhase = 'direction';
       return;
     }
     const channels = [0, 1, 2].map((s) => this.#channelOf(s as ServoIndex)) as unknown as Triple<number>;
@@ -416,14 +409,12 @@ export class CalibrationSession {
       this.#message = problem;
       return false;
     }
-    this.#clearTimers();
     this.#step = 'off';
     return true;
   }
 
   cancel(): void {
     if (this.#step === 'off') return;
-    this.#clearTimers();
     this.#step = 'off';
     this.#deps.cancel();
   }
@@ -499,11 +490,6 @@ export class CalibrationSession {
   #send(pulses: readonly number[]): void {
     this.#pulses = [...pulses];
     this.#deps.raw(this.#pulses);
-  }
-
-  #clearTimers(): void {
-    for (const timer of this.#timers) clearTimeout(timer);
-    this.#timers = [];
   }
 }
 

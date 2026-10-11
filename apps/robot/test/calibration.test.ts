@@ -1,7 +1,7 @@
 import { DEG_TO_RAD, solveFk, type Pose, type ServoIndex, type Triple } from '@peeqo/core';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { PRIOR_CALIBRATION, RANGE_MARGIN_DEG, REST_US, channelPulses, hornAngles, hornForPulse, hornRanges, pulseForHorn, type Calibration } from '../src/hardware/calibration.ts';
-import { ARM_RANGE_US, CHECK_TILT_DEG, CalibrationSession, MAX_DOWN_US, MIN_SWEEP_DEG, RAISE_DEG, SWEEP_DEG, WIGGLE_US } from '../src/hardware/calibrationSession.ts';
+import { ARM_RANGE_US, CHECK_TILT_DEG, CalibrationSession, FIND_MAX_US, FIND_STEP_US, MAX_DOWN_US, MIN_SWEEP_DEG, RAISE_DEG, SWEEP_DEG } from '../src/hardware/calibrationSession.ts';
 import { RAW_RANGE_US } from '../src/hardware/servoOutput.ts';
 
 const NEUTRAL: Pose = { pitchDeg: 0, rollDeg: 0, heaveMm: 3.2 };
@@ -18,7 +18,8 @@ const TRUTH: Calibration = {
 
 /**
  * Where each real arm touches something below it, and binds above (degrees of horn). At rest the arms sit at about
- * +1.1°, −1.6° and +2.5°, a few degrees clear of touching (the wiggle goes 1.4° either way).
+ * +1.1°, −1.6° and +2.5°, a few degrees clear of touching. (This robot turns the other way from the 2019 one: tapping
+ * ▲ to find an arm moves it down, so the person stops as soon as they see it move.)
  */
 const TRUE_LIMITS: readonly (readonly [number, number])[] = [
   [-3.5, 59],
@@ -43,23 +44,19 @@ const gaps = (channelUs: readonly number[]) => {
   };
 };
 
-/** A session up to the range step: arms matched, directions found (the 2019 way round), arms left at rest. */
+/** A session up to the range step: arms matched, directions found (the 2019 way round), arms level at rest. */
 function toRange(sent: number[][], save: (c: Calibration) => string | null = () => null) {
   const session = new CalibrationSession({ raw: (p) => void sent.push([...p]), neutral: NEUTRAL, save, cancel: () => undefined });
   session.start();
-  for (const servo of [0, 1, 2] as const) session.identified(servo);
-  for (let s = 0; s < 3; s++) {
-    session.probe();
-    session.plusMoved(false);
-    session.nudge(4); // back down the 20 µs of the + test: level at rest
-    session.armLevel();
+  for (const servo of [0, 1, 2] as const) {
+    session.move(3);
+    session.identified(servo, true);
   }
+  for (let s = 0; s < 3; s++) session.armLevel();
   return session;
 }
 
 describe('the guided calibration', () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
 
   it('finds a robot it has never seen, measures its range with the head moving together, and keeps every move near rest', () => {
     const sent: number[][] = [];
@@ -77,26 +74,25 @@ describe('the guided calibration', () => {
     session.start();
     expect(last()).toEqual([REST_US, REST_US, REST_US]);
 
-    // 1. Which arm moves? (The person watches the arms; here: whichever channel's pulse changed.)
+    // 1. Which arm moves, and which way? The person taps until they see an arm move (here: 2°), and says which.
+    session.identified(0, true); // (not before it has moved)
+    expect(session.view().message).toMatch(/Tap ▲ first/);
     for (let i = 0; i < 3; i++) {
-      const before = sent.length;
-      session.wiggle();
-      vi.advanceTimersByTime(3000);
-      const moved = sent.slice(before).flatMap((p) => p.flatMap((us, c) => (us !== REST_US ? [c] : [])));
-      expect(new Set(moved).size).toBe(1);
-      expect(Math.max(...sent.slice(before).flat().map((us) => Math.abs(us - REST_US)))).toBe(WIGGLE_US);
-      session.identified(servoOnChannel(moved[0]!));
+      const before = trueHorns(last());
+      const moved = () => trueHorns(last()).findIndex((h, s) => Math.abs(h - before[s]!) >= 2);
+      for (let tap = 0; tap < 20 && moved() < 0; tap++) session.move(1);
+      const servo = moved() as ServoIndex;
+      expect(servo).toBe(servoOnChannel(i));
+      expect(sent.at(-1)!.filter((us) => us !== REST_US)).toHaveLength(1); // only that plug's arm moved
+      session.identified(servo, trueHorn(servo, last()) > before[servo]!);
+      expect(last()).toEqual([REST_US, REST_US, REST_US]); // and it went back
     }
     expect(session.view().channelServo).toEqual([1, 2, 0]);
 
-    // 2. Each arm, in the board's order (front, Peeqo's right, its left): which way does + go, then level it by eye (to
-    //    within a quarter of a degree), a little on its own.
+    // 2. Each arm, in the board's order (front, Peeqo's right, its left): level it by eye (to within a quarter of a
+    //    degree), a little on its own.
     for (const servo of [0, 2, 1] as const) {
-      expect(session.view()).toMatchObject({ servo, armPhase: 'direction' });
-      session.nudge(-5); // nothing moves before the + test
-      const before = trueHorn(servo, last());
-      session.probe();
-      session.plusMoved(trueHorn(servo, last()) > before);
+      expect(session.view().servo).toBe(servo);
       for (let press = 0; press < 200 && Math.abs(trueHorn(servo, last())) > 0.25; press++) session.nudge(trueHorn(servo, last()) > 0 ? -1 : 1);
       expect(Math.abs(trueHorn(servo, last()))).toBeLessThanOrEqual(0.25);
       session.armLevel();
@@ -192,9 +188,19 @@ describe('the guided calibration', () => {
     const sent: number[][] = [];
     const session = new CalibrationSession({ raw: (p) => void sent.push([...p]), neutral: NEUTRAL, save: () => null, cancel: () => undefined });
     session.start();
-    for (const servo of [0, 1, 2] as const) session.identified(servo);
-    session.probe();
-    session.plusMoved(false); // + moved it down: up is a smaller pulse
+    // Finding an arm: about a degree a tap, never more than FIND_MAX_US from rest, and ▼ only back to rest.
+    session.move(1);
+    expect(sent.at(-1)).toEqual([REST_US - FIND_STEP_US, REST_US, REST_US]);
+    session.move(1000);
+    expect(sent.at(-1)![0]).toBe(REST_US - FIND_MAX_US);
+    expect(session.view().message).toMatch(/as far as it goes/);
+    session.move(-1000);
+    expect(sent.at(-1)![0]).toBe(REST_US);
+    session.move(2);
+    for (const servo of [0, 1, 2] as const) {
+      if (servo > 0) session.move(2);
+      session.identified(servo, true); // it went up for a smaller pulse
+    }
     session.nudge(-1000);
     expect(sent.at(-1)![0]).toBe(REST_US + MAX_DOWN_US);
     expect(session.view().message).toMatch(/as low as one arm/);
@@ -253,17 +259,19 @@ describe('the guided calibration', () => {
     expect(range.view().lowestDeg).toBe(-1.5);
   });
 
-  it('stops a wiggle the moment the arm is named (its last steps never land on the next step)', () => {
+  it('can go back to the last plug, forgetting what was said about it', () => {
     const sent: number[][] = [];
     const session = new CalibrationSession({ raw: (p) => void sent.push([...p]), neutral: NEUTRAL, save: () => null, cancel: () => undefined });
     session.start();
-    session.wiggle();
-    vi.advanceTimersByTime(400); // two of its seven steps
-    session.identified(0);
-    const after = sent.length;
+    session.move(4);
+    session.identified(0, true);
+    session.move(2);
+    session.back();
     expect(sent.at(-1)).toEqual([REST_US, REST_US, REST_US]);
-    vi.advanceTimersByTime(5000);
-    expect(sent.length).toBe(after);
+    expect(session.view()).toMatchObject({ channel: 0, movedDeg: 0, channelServo: [null, null, null], directions: [null, null, null] });
+    session.move(3);
+    session.identified(1, false);
+    expect(session.view()).toMatchObject({ channel: 1, channelServo: [1, null, null], directions: [null, 1, null] });
   });
 
   it('caps the total level correction (more means the arms were not level)', () => {
@@ -286,16 +294,12 @@ describe('the guided calibration', () => {
     let cancelled = 0;
     const session = new CalibrationSession({ raw: () => undefined, neutral: NEUTRAL, save: () => null, cancel: () => void cancelled++ });
     session.start();
-    session.identified(0);
-    session.identified(0);
+    session.move(3);
+    session.identified(0, true);
+    session.move(3);
+    session.identified(0, true);
     expect(session.view().message).toMatch(/already matched/);
-    session.identified(1);
-    session.identified(2);
-    session.probe();
-    session.plusMoved(true);
-    session.armLevel();
-    session.probe();
-    session.plusMoved(false);
+    session.identified(1, false);
     expect(session.view().message).toMatch(/different ways/);
     expect(session.save()).toBe(false); // not far enough to save
     session.cancel();

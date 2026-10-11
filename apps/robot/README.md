@@ -72,11 +72,11 @@ A button only counts once it has been seen released, so a button stuck down at s
 Calibration is done once, from the panel, with the cloth cover off so the three servo arms are visible. It takes
 about 10 minutes.
 
-1. **Which arm is which:** each channel wiggles its arm by about 1°, and you click the arm that moved.
-2. **Each arm:**
-   - **Direction:** press + once and say whether the arm went up or down.
-   - **Level:** nudge it until it points level. An arm only moves a little on its own: the arms are linked through
-     the head, so one arm alone tilts it.
+1. **Which arm is which, and which way it turns:** for each plug on the servo board, tap ▲ (about 1° a tap, up to
+   10°) until you see an arm move, then say which arm it was and whether it went up or down. The arms are short, so
+   it takes a few taps to see.
+2. **Level each arm:** nudge it until it points level. An arm only moves a little on its own: the arms are linked
+   through the head, so one arm alone tilts it.
 3. **Range, all together:** the whole head moves up and down, staying level. Each ▲/▼ moves all three arms by
    0.5°.
    - **Lowest:** lower it until something is just about to touch, then mark it.

@@ -3,9 +3,9 @@ import { api, el } from './dom.ts';
 export interface CalibrationView {
   step: 'off' | 'identify' | 'arms' | 'range' | 'level' | 'check' | 'done';
   channel: number;
+  movedDeg: number;
   channelServo: (0 | 1 | 2 | null)[];
   servo: 0 | 1 | 2;
-  armPhase: 'direction' | 'level';
   directions: (1 | -1 | null)[];
   rangePhase: 'lowest' | 'highest';
   sweepDeg: number;
@@ -22,7 +22,7 @@ export interface CalibrationView {
 
 /** The arms, by servo (the service's order), numbered as on the dev kit's board ("Servo 1" to "Servo 3"). */
 const ARMS = ['the front arm (1, under the face)', 'the arm on Peeqo’s left (3)', 'the arm on Peeqo’s right (2)'];
-const ARM_BUTTONS = ['1 · Front', '3 · Peeqo’s left', '2 · Peeqo’s right'];
+const ARM_LABELS = ['1 · Front', '3 · Peeqo’s left', '2 · Peeqo’s right'];
 const BOARD_NUMBERS = [1, 3, 2];
 /** The servos in the board's order. */
 const BOARD_ORDER = [0, 2, 1] as const;
@@ -85,26 +85,32 @@ export function calibrationCard(card: HTMLElement): (view: CalibrationView, cali
         break;
       case 'identify': {
         const taken = new Set(view.channelServo.filter((s) => s !== null));
+        const answer = (servo: 0 | 1 | 2, up: boolean) =>
+          Object.assign(button(up ? 'Up' : 'Down', 'identified', { servo, up }), { disabled: taken.has(servo) || view.movedDeg === 0 });
         parts.push(
-          el('p', { text: `Channel ${view.channel + 1} of 3: press Wiggle, watch the arms, then tell Peeqo which one moved.` }),
-          el('div', { class: 'row' }, button('Wiggle', 'wiggle', {}, 'primary'), armsDiagram(null)),
-          el('div', { class: 'row' }, ...BOARD_ORDER.map((servo) => Object.assign(button(ARM_BUTTONS[servo]!, 'identified', { servo }), { disabled: taken.has(servo) }))),
+          el('p', { text: `Plug ${view.channel + 1} of 3 on the servo board. Tap ▲ until you see one of the arms move (about 1° a tap: it takes a few). Stop if anything is about to touch.` }),
+          el(
+            'div',
+            { class: 'row' },
+            el('div', { class: 'row' }, button('▲', 'move', { steps: 1 }, 'primary'), button('▼ back', 'move', { steps: -1 }), el('span', { class: 'muted small', text: `moved ${view.movedDeg.toFixed(0)}° of 10°` })),
+            armsDiagram(null),
+          ),
+          el('p', { text: 'Which arm moved, and which way?' }),
+          ...BOARD_ORDER.map((servo) =>
+            el('div', { class: 'row', role: 'group', 'aria-label': ARM_LABELS[servo]! }, el('span', { style: 'min-width: 140px', text: ARM_LABELS[servo]! }), answer(servo, true), answer(servo, false)),
+          ),
+          view.channel > 0 ? el('div', { class: 'row', style: 'margin-top: 8px' }, button('Back to the last plug', 'back')) : null,
         );
         break;
       }
-      case 'arms': {
-        parts.push(el('div', { class: 'row' }, armsDiagram(view.servo), el('p', { class: 'grow', text: `Now ${ARMS[view.servo]}.` })));
-        if (view.armPhase === 'direction') {
-          parts.push(el('p', { text: 'Press “+ once” and watch that arm.' }), el('div', { class: 'row' }, button('+ once', 'probe', {}, 'primary'), el('span', { class: 'muted', text: 'Did it go…' }), button('Up', 'plusMoved', { up: true }), button('Down', 'plusMoved', { up: false })));
-        } else {
-          parts.push(
-            el('p', { text: 'Move it until it points straight out, level. Stop before it touches anything.' }),
-            el('p', { class: 'muted small', text: 'It only moves a little on its own: the arms are linked, so one arm alone tilts the head.' }),
-            el('div', { class: 'row' }, button('▲ up', 'nudge', { steps: 1 }), button('▲▲', 'nudge', { steps: 5 }), button('▼ down', 'nudge', { steps: -1 }), button('▼▼', 'nudge', { steps: -5 }), button('It’s level', 'armLevel', {}, 'primary')),
-          );
-        }
+      case 'arms':
+        parts.push(
+          el('div', { class: 'row' }, armsDiagram(view.servo), el('p', { class: 'grow', text: `Now ${ARMS[view.servo]}.` })),
+          el('p', { text: 'Move it until it points straight out, level. Stop before it touches anything.' }),
+          el('p', { class: 'muted small', text: 'It only moves a little on its own: the arms are linked, so one arm alone tilts the head.' }),
+          el('div', { class: 'row' }, button('▲ up', 'nudge', { steps: 1 }), button('▲▲', 'nudge', { steps: 5 }), button('▼ down', 'nudge', { steps: -1 }), button('▼▼', 'nudge', { steps: -5 }), button('It’s level', 'armLevel', {}, 'primary')),
+        );
         break;
-      }
       case 'range': {
         const lowest = view.rangePhase === 'lowest';
         parts.push(
