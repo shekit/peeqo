@@ -1,5 +1,9 @@
-import { HEAD_ANIMATIONS, type HeadAnimationName, type HeadClip } from './headAnimations.ts';
+import { checkPose } from './check.ts';
+import type { ClearanceModel } from './clearance.ts';
+import { DEFAULT_GEOMETRY, type PlatformGeometry } from './geometry.ts';
+import { HEAD_ANIMATIONS, HEAD_ANIMATION_NAMES, type HeadAnimationName, type HeadClip } from './headAnimations.ts';
 import type { Pose } from './kinematics.ts';
+import type { SafetyLimits } from './limits.ts';
 import { MonotoneCurve, SecondOrder, seededRandom, smoothWander } from './motion.ts';
 
 type Offset = [number, number, number]; // [pitch°, roll°, heave mm] from neutral
@@ -27,6 +31,8 @@ const AMPLITUDE_VARIATION = 0.08;
 const TIMING_VARIATION = 0.06;
 /** How long an interrupted gesture takes to hand over to the next. */
 const HANDOVER_S = 0.3;
+/** The sizes setSize allows. */
+const SIZE_RANGE = [0, 4] as const;
 /** How quickly the idle layer fades in and out (time constant, s). */
 const IDLE_BLEND_S = 0.35;
 /** The idle layer's share while a gesture plays (breathing carries on underneath). */
@@ -64,6 +70,8 @@ export class HeadAnimator {
   #idleOn: boolean;
   #idleWeight: number;
   #energy = 1;
+  /** How big gestures and glances are, relative to how they were written (see setSize). */
+  #size = 1;
   /** Energy as the idle layer feels it: glides toward #energy so changes never jolt the head. */
   #liveliness = 1;
   #gesture: { clip: HeadClip; start: number; amplitude: number; timeScale: number } | null = null;
@@ -110,6 +118,18 @@ export class HeadAnimator {
   /** How lively the idle layer is, 0…1. */
   setEnergy(energy: number): void {
     if (Number.isFinite(energy)) this.#energy = clamp(energy, 0, 1);
+  }
+
+  /**
+   * How big gestures and glances are, relative to how they were written (for the CAD's room around the simulator's
+   * neutral pose): a neck with more room gets bigger moves (see gestureSize). Breathing and wander stay as they are.
+   */
+  setSize(size: number): void {
+    if (Number.isFinite(size)) this.#size = clamp(size, SIZE_RANGE[0], SIZE_RANGE[1]);
+  }
+
+  get size(): number {
+    return this.#size;
   }
 
   /** Starts a gesture, handing over smoothly from whatever was playing. */
@@ -171,7 +191,8 @@ export class HeadAnimator {
     const g = this.#gesture;
     if (!g) return [0, 0, 0];
     const at = g.clip.at((t - g.start) * g.timeScale);
-    return [at[0] * g.amplitude, at[1] * g.amplitude, at[2] * g.amplitude];
+    const k = g.amplitude * this.#size;
+    return [at[0] * k, at[1] * k, at[2] * k];
   }
 
   /** How far the current handover has got: 0 = all of what was interrupted, 1 = all new (also when there is none). */
@@ -242,12 +263,13 @@ export class HeadAnimator {
       return;
     }
     // A look in a random direction, or (one time in four) a curious tilt; size follows energy.
-    const size = GLANCE.tiltDeg * (0.4 + 0.6 * this.#liveliness) * (0.55 + 0.45 * this.#random());
+    const size = GLANCE.tiltDeg * this.#size * (0.4 + 0.6 * this.#liveliness) * (0.55 + 0.45 * this.#random());
+    const rise = GLANCE.heaveMm * this.#size;
     const curious = this.#random() < 0.25;
     const angle = this.#random() * 2 * Math.PI;
     const target: Offset = curious
-      ? [size * 0.3, (this.#random() < 0.5 ? -1 : 1) * size * 0.95, -GLANCE.heaveMm * 0.5]
-      : [size * Math.sin(angle) * 0.8, size * Math.cos(angle), GLANCE.heaveMm * (this.#random() * 2 - 1)];
+      ? [size * 0.3, (this.#random() < 0.5 ? -1 : 1) * size * 0.95, -rise * 0.5]
+      : [size * Math.sin(angle) * 0.8, size * Math.cos(angle), rise * (this.#random() * 2 - 1)];
     const reach = 0.28 + this.#random() * 0.2;
     const hold = reach + 0.6 + this.#random() * (curious ? 1.4 : 1.0);
     const back = hold + 0.45 + this.#random() * 0.3;
@@ -257,4 +279,38 @@ export class HeadAnimator {
       start: t,
     };
   }
+}
+
+/**
+ * How big the gestures can be on a neck (HeadAnimator.setSize): the largest size at which every gesture, every
+ * 20 ms, still keeps the headroom it was written with (a quarter of the room left over, for the idle layer and each
+ * play's variation) inside these limits around this neutral pose. About 1 for the CAD's room around the simulator's
+ * neutral (what they were written for); more on a neck with more room. At most 4.
+ */
+export function gestureSize(neutral: Pose, limits: SafetyLimits, geometry: PlatformGeometry = DEFAULT_GEOMETRY, clearance: ClearanceModel | null = null): number {
+  const HEADROOM = 4 / 3;
+  const frames: Offset[] = [];
+  for (const name of HEAD_ANIMATION_NAMES) {
+    const clip = HEAD_ANIMATIONS.get(name)!;
+    for (let t = 0; t <= clip.duration + 1e-9; t += 0.02) frames.push(clip.at(t));
+  }
+  // Glances (their biggest, in any direction) are smaller than the gestures, but are checked too.
+  for (let a = 0; a < 360; a += 30) {
+    const r = (a * Math.PI) / 180;
+    frames.push([GLANCE.tiltDeg * Math.sin(r) * 0.8, GLANCE.tiltDeg * Math.cos(r), GLANCE.heaveMm * (a < 180 ? 1 : -1)]);
+  }
+  const fits = (size: number) =>
+    frames.every((f) => {
+      const k = size * HEADROOM;
+      return checkPose({ pitchDeg: neutral.pitchDeg + f[0] * k, rollDeg: neutral.rollDeg + f[1] * k, heaveMm: neutral.heaveMm + f[2] * k }, geometry, limits, clearance).ok;
+    });
+  let lo = 0;
+  let hi: number = SIZE_RANGE[1];
+  if (fits(hi)) return hi;
+  for (let i = 0; i < 12; i++) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) lo = mid;
+    else hi = mid;
+  }
+  return Math.floor(lo * 20) / 20;
 }

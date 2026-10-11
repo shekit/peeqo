@@ -73,7 +73,7 @@ The robot runs `apps/robot`: the same brain, character and governor as the simul
     about 85° either way).
 - **Still to check on the hardware:**
   - the screen's resolution and rotation;
-  - the audio devices;
+  - the speaker and microphone levels (the sound chip is set up; the wake word still needs trying);
   - where LED 0 sits;
   - which button is which;
   - backlash and play in the rod ends (the model assumes rigid, perfectly fitted parts).

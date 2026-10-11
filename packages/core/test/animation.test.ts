@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_CLEARANCE,
   DEFAULT_SAFETY_LIMITS,
   HEAD_ANIMATIONS,
   HEAD_ANIMATION_NAMES,
@@ -8,6 +9,7 @@ import {
   MotionGovernor,
   SecondOrder,
   checkPose,
+  gestureSize,
   type Pose,
 } from '../src/index.ts';
 
@@ -261,6 +263,40 @@ describe('HeadAnimator', () => {
     };
     expect(run(7)).toEqual(run(7));
     expect(run(7)).not.toEqual(run(8));
+  });
+
+  it('sizes gestures to the neck’s room: as written for the CAD’s, bigger with more, and scaled exactly', () => {
+    const cad = gestureSize(neutral, DEFAULT_SAFETY_LIMITS, undefined, DEFAULT_CLEARANCE);
+    expect(cad).toBeGreaterThanOrEqual(0.9);
+    expect(cad).toBeLessThanOrEqual(1.1);
+    // Without the CAD's collision tables, around its home pose (arms level), there is about twice the room, and at
+    // that size every gesture still keeps a quarter of it spare.
+    const home: Pose = { pitchDeg: 0, rollDeg: 0, heaveMm: 0 };
+    const size = gestureSize(home, DEFAULT_SAFETY_LIMITS);
+    expect(size).toBeGreaterThan(1.8);
+    for (const name of HEAD_ANIMATION_NAMES) {
+      const clip = HEAD_ANIMATIONS.get(name)!;
+      for (let t = 0; t <= clip.duration; t += 0.01) {
+        const o = clip.at(t).map((v) => (v * size * 4) / 3);
+        expect(checkPose({ pitchDeg: o[0]!, rollDeg: o[1]!, heaveMm: o[2]! }, undefined, DEFAULT_SAFETY_LIMITS, null).ok, `${name} at ${t}`).toBe(true);
+      }
+    }
+    // setSize scales a gesture exactly (the spring is linear), and is capped.
+    const peak = (s: number) => {
+      const a = new HeadAnimator(neutral, { seed: 3, idle: false });
+      a.setSize(s);
+      a.play('nod');
+      let p = a.update(DT);
+      for (let i = 0; i < 40; i++) p = a.update(DT);
+      return p;
+    };
+    const [one, two] = [peak(1), peak(2)];
+    expect(Math.abs(one.pitchDeg - neutral.pitchDeg)).toBeGreaterThan(0.5);
+    expect(two.pitchDeg - neutral.pitchDeg).toBeCloseTo(2 * (one.pitchDeg - neutral.pitchDeg), 9);
+    expect(two.heaveMm - neutral.heaveMm).toBeCloseTo(2 * (one.heaveMm - neutral.heaveMm), 9);
+    const capped = new HeadAnimator(neutral);
+    capped.setSize(100);
+    expect(capped.size).toBe(4);
   });
 
   it('caps intensity and speed to what the gestures were designed for', () => {

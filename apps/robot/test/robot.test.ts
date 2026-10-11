@@ -211,6 +211,12 @@ describe('the robot (no hardware) and its web server', () => {
     expect(ranges[1][1]).toBeCloseTo((1530 - 950) / (2060 / 180) - 1.5, 6);
     expect(robot.config.config.calibration?.rangeUs).toEqual(fine.rangeUs);
     expect(robot.servos.calibration).toEqual(fine);
+    // Head moves are sized to the room the marks leave: little below level here, so they shrink; much more with arms
+    // that swing far either way (like the dev kit's), so they grow.
+    expect(robot.animator.size).toBeLessThan(0.5);
+    const wide = { ...base, rangeUs: [[600, 2400], [600, 2400], [600, 2400]] as const };
+    expect(robot.useCalibration(wide)).toBeNull();
+    expect(robot.animator.size).toBeGreaterThan(1.8);
   });
 
   it('talks, and calibrates only from the resting pulse', async () => {

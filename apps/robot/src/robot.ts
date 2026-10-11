@@ -27,6 +27,7 @@ import {
   LedAnimator,
   MotionGovernor,
   describeLedPattern,
+  gestureSize,
   type HeadAnimationName,
   type LedPatternName,
   type Pose,
@@ -193,6 +194,7 @@ export class Robot {
     governor ??= governorFor(ROBOT_LIMITS);
     this.#governor = governor;
     this.animator = new HeadAnimator(governor.neutral, { seed: seed() });
+    this.#sizeMoves();
     this.leds = new LedAnimator(this.strip, { seed: seed() });
     this.speaker = new Speaker({ fake: options.fake, device: options.speakerDevice ?? null });
     this.character = new Character({ head: this.animator, face: this.face, leds: this.leds, sound: this.speaker });
@@ -288,6 +290,7 @@ export class Robot {
       return `Peeqo's normal pose does not fit inside the ranges you marked (${error instanceof Error ? error.message : String(error)}). Check the marks and start over.`;
     }
     this.#governor = governor;
+    this.#sizeMoves();
     this.animator.resetFrom(governor.output.pose);
     this.config.update({ calibration });
     this.servos.setCalibration(calibration);
@@ -394,6 +397,16 @@ export class Robot {
 
   poke(): void {
     this.life.poke(performance.now());
+  }
+
+  /**
+   * Sizes the head moves to the room the limits leave around the neutral pose (with the calibrated ranges: as big as
+   * fits, keeping the headroom they were written with). They were written for the CAD's smaller room.
+   */
+  #sizeMoves(): void {
+    const size = gestureSize(this.#governor.neutral, this.#governor.limits, undefined, null);
+    this.animator.setSize(size);
+    if (this.config.config.calibration) this.log(`head moves sized ×${size.toFixed(2)} for the calibrated range`);
   }
 
   /** What the panel's Expressions card can play: Peeqo's expressions, head moves and light patterns. */

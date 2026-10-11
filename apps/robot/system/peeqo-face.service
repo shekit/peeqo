@@ -20,6 +20,9 @@ StandardError=journal
 UtmpIdentifier=tty1
 UtmpMode=user
 Environment=WLR_LIBINPUT_NO_DEVICES=1
+# No mouse pointer on the face (an invisible cursor theme, installed by install.sh).
+Environment=XCURSOR_THEME=peeqo-blank
+Environment=XCURSOR_SIZE=24
 # Wait for the service to answer before opening the page.
 ExecStartPre=/bin/sh -c 'for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost/face && exit 0; sleep 1; done; exit 0'
 # Low-memory settings for the Pi 3 B+ (1 GB), and the face drawn at 30 frames a second. The dev kit's screen is 480×800,

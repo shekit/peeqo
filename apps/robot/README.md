@@ -93,8 +93,9 @@ You set the limits: calibration has none of its own, only the servos' travel (50
 slow step you ask for, so stop before anything touches. It starts from 1500 µs, where the 2019 software always left
 the servos. The servo driver is set up exactly as the 2019 one was, so 1500 µs means the same thing.
 
-After calibration, the motion governor drives the servos. Peeqo stands with its arms level, and your marks are its
-only limits on where the arms go:
+After calibration, the motion governor drives the servos. Peeqo stands with its arms level, its head moves are sized
+to fill the room your marks leave (they were written for the 3D model's smaller room: on the dev kit they play about
+twice as big, keeping a quarter of the room spare), and your marks are its only limits on where the arms go:
 - **The governor plans inside them,** 1.5° in from each mark. Beyond that it only keeps to the neck's geometry (no leg
   pulled straight), a box on tilts, and its speed caps. It doesn't use the 3D model's collision tables on the robot:
   they put the arms' holders just below level, but the dev kit's arms move freely about 85° either way.
@@ -119,8 +120,12 @@ only limits on where the arms go:
   - The wake word detector leaves out openWakeWord's training libraries, using about 120 MB instead of 200 MB.
   - Measured on a Mac: the service uses about 130 MB, and its motion loop under 3% of one Pi core.
   - The face screen is the part to watch on the real board.
-- **Microphone and speaker:** the default ALSA devices. Pick others with `--mic` and `--speaker` in
-  `/etc/systemd/system/peeqo.service` (see `arecord -L` and `aplay -L`).
+- **Microphone and speaker:** the board's WM8960 sound chip. The installer turns it on (`dtoverlay=wm8960-soundcard`;
+  restart the robot after the first install), makes it the default for playing and recording (`/etc/asound.conf`:
+  48 kHz, shared, so sounds play while the microphone listens), and sets its levels once
+  (`system/sound-levels.sh`; change them with `alsamixer -c wm8960soundcard`). Pick other devices with `--mic` and
+  `--speaker` in `/etc/systemd/system/peeqo.service` (see `arecord -L` and `aplay -L`).
+- **Face screen:** the kiosk shows no mouse pointer (an invisible cursor theme, `peeqo-blank`).
 - **Hardware access:** the hardware helper (`python/hardware.py`) drives the servo board (PCA9685, I²C bus 1, 0x40),
   the LED ring (12 APA102 LEDs on SPI 0.0, 4 MHz) and the buttons (GPIO 4, 16, 17 and 23, high when pressed), all as
   wired in 2019.
@@ -130,7 +135,7 @@ only limits on where the arms go:
 These can't be checked without the hardware:
 
 - the screen's resolution and rotation;
-- which ALSA devices are the mic and the speaker, and their levels;
+- the speaker and microphone levels, and the wake word, by ear;
 - where LED 0 sits on the ring;
 - which physical button is which GPIO (the panel's log shows each press);
 - the setup network and captive portal on real phones;

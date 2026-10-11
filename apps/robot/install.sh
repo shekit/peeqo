@@ -60,6 +60,32 @@ if have raspi-config; then
 else
   echo "(no raspi-config: not a Raspberry Pi OS; skipping)"
 fi
+step "Sound (the board's WM8960 chip: speaker and microphones)"
+BOOT_CONFIG=/boot/firmware/config.txt
+[ -f "$BOOT_CONFIG" ] || BOOT_CONFIG=/boot/config.txt
+restart_for_sound=0
+if [ -f "$BOOT_CONFIG" ] && ! grep -q '^dtoverlay=wm8960-soundcard' "$BOOT_CONFIG"; then
+  printf '\n[all]\n# Peeqo: the board'"'"'s sound chip (speaker and microphones)\ndtoverlay=wm8960-soundcard\n' | sudo tee -a "$BOOT_CONFIG" >/dev/null
+  restart_for_sound=1
+fi
+sudo install -m 0644 "$DIR/apps/robot/system/asound.conf" /etc/asound.conf
+if aplay -l 2>/dev/null | grep -q wm8960; then
+  bash "$DIR/apps/robot/system/sound-levels.sh"
+else
+  echo "(the sound chip shows up after the robot restarts)"
+fi
+
+step "Face screen"
+# The kiosk compositor draws a mouse pointer on the screen: an invisible cursor theme hides it.
+CURSORS=/usr/share/icons/peeqo-blank/cursors
+if [ ! -f "$CURSORS/default" ]; then
+  sudo install -d "$CURSORS"
+  # One transparent 1×1 image in the Xcursor format.
+  python3 -c 'import struct, sys; sys.stdout.buffer.write(b"Xcur" + struct.pack("<3I", 16, 0x10000, 1) + struct.pack("<3I", 0xFFFD0002, 24, 28) + struct.pack("<9I", 36, 0xFFFD0002, 24, 1, 1, 1, 0, 0, 0) + struct.pack("<I", 0))' | sudo tee "$CURSORS/default" >/dev/null
+  for name in left_ptr arrow top_left_arrow pointer hand1 hand2 text xterm wait watch progress crosshair grab grabbing move; do sudo ln -sf default "$CURSORS/$name"; done
+  printf '[Icon Theme]\nName=peeqo-blank\nComment=An invisible cursor, for Peeqo'"'"'s face screen\n' | sudo tee /usr/share/icons/peeqo-blank/index.theme >/dev/null
+fi
+
 groups_wanted=()
 for group in audio i2c spi gpio video input render; do getent group "$group" >/dev/null && groups_wanted+=("$group"); done
 if [ ${#groups_wanted[@]} -gt 0 ]; then sudo usermod -aG "$(IFS=,; echo "${groups_wanted[*]}")" "$ME"; fi
@@ -90,3 +116,4 @@ fi
 step "Done"
 echo "Peeqo is starting. Open http://$(hostname).local on a phone or laptop on the same Wi-Fi."
 echo "If the name changed just now, restart the robot first (sudo reboot)."
+if [ "$restart_for_sound" -eq 1 ]; then echo "Restart the robot to finish setting up its sound: sudo reboot"; fi
