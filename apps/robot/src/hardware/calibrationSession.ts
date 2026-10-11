@@ -238,13 +238,16 @@ export class CalibrationSession {
     const direction = this.#directions[this.#servo];
     if (direction !== 1 && direction !== -1) return;
     const channel = this.#channelOf(this.#servo);
-    // Measured upward from the resting pulse: no more than MAX_DOWN_US below it, nor ARM_RANGE_US above.
+    // Measured upward from the resting pulse, in whole nudges (so it always comes back to rest exactly): no more than
+    // MAX_DOWN_US below it, nor ARM_RANGE_US above.
+    const lowest = -Math.floor(MAX_DOWN_US / NUDGE_US) * NUDGE_US;
+    const highest = Math.floor(ARM_RANGE_US / NUDGE_US) * NUDGE_US;
     const wantedUp = (this.#pulses[channel]! - REST_US) * direction + Math.round(steps) * NUDGE_US;
-    const up = Math.min(ARM_RANGE_US, Math.max(-MAX_DOWN_US, wantedUp));
+    const up = Math.min(highest, Math.max(lowest, wantedUp));
     this.#message =
-      wantedUp < -MAX_DOWN_US
+      wantedUp < lowest
         ? 'That is as low as one arm may go on its own (it is close to its holder).'
-        : wantedUp > ARM_RANGE_US
+        : wantedUp > highest
           ? 'That is as far as one arm may go on its own (more would tilt the head too far).'
           : null;
     this.#send(this.#pulses.map((p, c) => (c === channel ? REST_US + up * direction : p)));

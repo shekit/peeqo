@@ -1,7 +1,7 @@
 import { DEG_TO_RAD, solveFk, type Pose, type ServoIndex, type Triple } from '@peeqo/core';
 import { describe, expect, it } from 'vitest';
 import { PRIOR_CALIBRATION, RANGE_MARGIN_DEG, REST_US, channelPulses, hornAngles, hornForPulse, hornRanges, pulseForHorn, type Calibration } from '../src/hardware/calibration.ts';
-import { ARM_RANGE_US, CHECK_TILT_DEG, CalibrationSession, FIND_MAX_US, FIND_STEP_US, MAX_DOWN_US, MIN_SWEEP_DEG, RAISE_DEG, SWEEP_DEG } from '../src/hardware/calibrationSession.ts';
+import { ARM_RANGE_US, CHECK_TILT_DEG, CalibrationSession, FIND_MAX_US, FIND_STEP_US, MAX_DOWN_US, MIN_SWEEP_DEG, NUDGE_US, RAISE_DEG, SWEEP_DEG } from '../src/hardware/calibrationSession.ts';
 import { RAW_RANGE_US } from '../src/hardware/servoOutput.ts';
 
 const NEUTRAL: Pose = { pitchDeg: 0, rollDeg: 0, heaveMm: 3.2 };
@@ -202,8 +202,12 @@ describe('the guided calibration', () => {
       session.identified(servo, true); // it went up for a smaller pulse
     }
     session.nudge(-1000);
-    expect(sent.at(-1)![0]).toBe(REST_US + MAX_DOWN_US);
+    const down = sent.at(-1)![0]! - REST_US;
+    expect(down).toBeLessThanOrEqual(MAX_DOWN_US);
+    expect(down).toBeGreaterThan(MAX_DOWN_US - NUDGE_US);
     expect(session.view().message).toMatch(/as low as one arm/);
+    session.nudge(down / NUDGE_US); // whole nudges: back to rest exactly
+    expect(sent.at(-1)![0]).toBe(REST_US);
     session.nudge(1000);
     expect(sent.at(-1)![0]).toBe(REST_US - ARM_RANGE_US);
     expect(session.view().message).toMatch(/tilt the head/);
