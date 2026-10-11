@@ -9,8 +9,9 @@ import { ButtonGestures, SETUP_HOLD_MS, SHUTDOWN_HOLD_MS } from '../src/buttons.
 import { ConfigStore, hashPin, verifyPin } from '../src/config.ts';
 import { REST_US } from '../src/hardware/calibration.ts';
 import { CalibrationSession } from '../src/hardware/calibrationSession.ts';
-import { FakeNetwork, nmcliFields, parseWifiList } from '../src/net/network.ts';
-import { SETUP_ADDRESS, SetupController } from '../src/net/setup.ts';
+import { healthChanges, HealthMonitor, parseThrottled } from '../src/health.ts';
+import { FakeNetwork, NmcliNetwork, nmcliFields, parseWifiList } from '../src/net/network.ts';
+import { SETUP_ADDRESS, SetupController, WIFI_CHECK_MS, WIFI_LOST_MS } from '../src/net/setup.ts';
 import { ROBOT_LIMITS, Robot } from '../src/robot.ts';
 import { RobotServer } from '../src/web/server.ts';
 
@@ -119,6 +120,101 @@ describe('Wi-Fi', () => {
     await setup.submit({ ssid: 'Home Wi-Fi', password: 'rightpassword' }); // the PIN is kept
     await vi.waitFor(() => expect(setup.open).toBe(false));
     await vi.waitFor(() => expect(screens.at(-1)).toBe("I'm on Home Wi-Fi [http://127.0.0.1/]"));
+  });
+
+  it('turns the Wi-Fi off and on again once the router has not answered for two minutes (and not while setting up)', async () => {
+    vi.useFakeTimers();
+    try {
+      const logs: string[] = [];
+      const network = new FakeNetwork({ delayMs: 0 });
+      const setup = new SetupController({ network, config: new ConfigStore(tempDir()), showScreen: () => undefined, applySettings: () => undefined, log: (l) => logs.push(l), hostname: 'peeqo' });
+      const stop = setup.watch();
+      const wait = (ms: number) => vi.advanceTimersByTimeAsync(ms);
+      await wait(WIFI_CHECK_MS * 4);
+      expect(network.wifiRestarts).toBe(0); // the router answers
+      network.routerAnswers = false;
+      await wait(WIFI_CHECK_MS);
+      expect(logs.at(-1)).toMatch(/does not answer/);
+      await wait(WIFI_LOST_MS - WIFI_CHECK_MS);
+      expect(network.wifiRestarts).toBe(0);
+      await wait(WIFI_CHECK_MS);
+      expect(network.wifiRestarts).toBe(1);
+      await wait(WIFI_LOST_MS);
+      expect(network.wifiRestarts).toBe(2); // and again while it stays silent
+      network.routerAnswers = true;
+      await wait(WIFI_CHECK_MS);
+      expect(logs.at(-1)).toMatch(/answers again/);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('asks the router, through the default route', async () => {
+    const ran: string[] = [];
+    const network = (answers: boolean) =>
+      new NmcliNetwork({
+        run: async () => '',
+        exec: async (file, args) => {
+          ran.push(`${file} ${args.join(' ')}`);
+          if (file === 'ip') return 'default via 10.15.75.1 dev wlan0 proto dhcp src 10.15.75.182 metric 600\n';
+          if (!answers) throw new Error('no answer');
+          return '';
+        },
+      });
+    expect(await network(true).reachable()).toBe(true);
+    expect(ran.at(-1)).toBe('ping -c 1 -W 3 10.15.75.1');
+    expect(await network(false).reachable()).toBe(false);
+  });
+});
+
+describe('heat and power', () => {
+  it("reads the firmware's flags, and logs only what changes", async () => {
+    expect(parseThrottled('throttled=0x0')).toEqual({ underVoltage: false, underVoltageSeen: false, slowedForHeat: false, throttled: false });
+    expect(parseThrottled('throttled=0x50005')).toEqual({ underVoltage: true, underVoltageSeen: true, slowedForHeat: false, throttled: true });
+    expect(parseThrottled('throttled=0x80008')).toMatchObject({ slowedForHeat: true, underVoltage: false });
+    expect(parseThrottled('nonsense')).toBeNull();
+    const calm = { tempC: 50, underVoltage: false, underVoltageSeen: false, slowedForHeat: false, throttled: false };
+    expect(healthChanges(calm, calm)).toEqual([]);
+    expect(healthChanges(calm, { ...calm, tempC: 61, slowedForHeat: true })).toEqual(['heat: the Pi is slowing itself down a little to stay cool (61 °C)']);
+    expect(healthChanges(calm, { ...calm, underVoltage: true, underVoltageSeen: true })[0]).toMatch(/under-voltage/);
+    let flags = 'throttled=0x0';
+    const logs: string[] = [];
+    const monitor = new HealthMonitor((l) => logs.push(l), { temperature: async () => '62838\n', throttled: async () => flags });
+    await monitor.check();
+    expect(monitor.health.tempC).toBe(62.8);
+    expect(logs).toEqual([]);
+    flags = 'throttled=0x80008';
+    await monitor.check();
+    await monitor.check();
+    expect(logs).toEqual(['heat: the Pi is slowing itself down a little to stay cool (63 °C)']);
+  });
+});
+
+describe('shutting down', () => {
+  it('forces it if asking fails, and if even that fails says it is safe to unplug', async () => {
+    const ran: string[] = [];
+    const robot = new Robot({ dataDir: tempDir(), fake: true, appDir: APP_DIR, log: () => undefined, system: async (c) => (ran.push(c.join(' ')), 'Access denied') });
+    await robot.shutdown();
+    expect(ran).toEqual(['systemctl poweroff', 'systemctl poweroff --force']);
+    expect(robot.face.screen).toMatchObject({ title: "I couldn't shut down", tone: 'warn' });
+    expect(robot.face.screen?.lines).toContain('It is safe to unplug me now.');
+  });
+
+  it('forces it if the system has not stopped Peeqo half a minute after being asked', async () => {
+    vi.useFakeTimers();
+    try {
+      const ran: string[] = [];
+      const robot = new Robot({ dataDir: tempDir(), fake: true, appDir: APP_DIR, log: () => undefined, system: async (c) => (ran.push(c.join(' ')), null) });
+      const done = robot.reboot();
+      await vi.advanceTimersByTimeAsync(3000);
+      await done;
+      expect(ran).toEqual(['systemctl reboot']);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(ran).toEqual(['systemctl reboot', 'systemctl reboot --force']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

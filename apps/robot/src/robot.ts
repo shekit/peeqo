@@ -43,6 +43,7 @@ import { MirroredFace, type FaceScreen } from './face/mirroredFace.ts';
 import { RobotBody } from './face/robotBody.ts';
 import { apa102Frame } from './hardware/apa102.ts';
 import { hornRanges, type Calibration } from './hardware/calibration.ts';
+import { HealthMonitor, type Health } from './health.ts';
 import { HardwareLink, type HardwareOutputs, type HardwareStatus } from './hardware/link.ts';
 import { ServoOutput, type ServoState } from './hardware/servoOutput.ts';
 
@@ -68,6 +69,10 @@ export function limitsFor(calibration: Calibration): SafetyLimits | null {
 /** The governor for some limits (on the robot: no CAD collision tables, see ROBOT_LIMITS). Throws if the neutral pose breaks them. */
 const governorFor = (limits: SafetyLimits) => new MotionGovernor(undefined, limits, NEUTRAL, null);
 
+/** Shutting down: how long to wait for the last saves, and for the system to stop Peeqo before forcing it. */
+const POWER_SAVE_WAIT_MS = 3000;
+const POWER_FORCE_AFTER_MS = 30_000;
+
 const STEP_S = 0.01;
 const MAX_STEPS_PER_TICK = 10;
 const TRANSCRIPT_LINES = 100;
@@ -84,8 +89,8 @@ export interface RobotOptions {
   readonly wakeWord?: { readonly python: string; readonly script: string } | null;
   readonly micDevice?: string | null;
   readonly speakerDevice?: string | null;
-  /** Run a command as root (shutdown); default sudo. Replaced in tests. */
-  readonly system?: (command: readonly string[]) => Promise<void>;
+  /** Run a command as root (shutdown); default sudo. Resolves with why it failed, or null. Replaced in tests. */
+  readonly system?: (command: readonly string[]) => Promise<string | null>;
   readonly log?: (line: string) => void;
 }
 
@@ -113,6 +118,8 @@ export interface RobotState {
   readonly memory: readonly string[];
   readonly timers: readonly { readonly id: string; readonly kind: string; readonly label: string; readonly inMs: number }[];
   readonly screens: number;
+  /** The Pi's temperature and power (null with fake hardware). */
+  readonly health: Health | null;
 }
 
 /** Saved by HardwareLink until it starts; the servo output and LEDs can be given commands before then. */
@@ -270,6 +277,7 @@ export class Robot {
   }
 
   #pendingLog: string | null = null;
+  #health: HealthMonitor | null = null;
 
   /** The motion governor: every pose goes through it (replaced when a calibration brings new measured ranges). */
   get governor(): MotionGovernor {
@@ -331,6 +339,10 @@ export class Robot {
 
   async start(): Promise<void> {
     if (this.#pendingLog) this.log(this.#pendingLog);
+    if (!this.options.fake) {
+      this.#health = new HealthMonitor((line) => this.log(line));
+      this.#health.start();
+    }
     await this.brain.restore().catch((error: unknown) => this.log(`could not load memory: ${String(error)}`));
     // The hardware helper: servos, LEDs, buttons.
     const config = this.config.config;
@@ -368,6 +380,7 @@ export class Robot {
 
   async stop(): Promise<void> {
     this.#stopping = true;
+    this.#health?.stop();
     if (this.#timer) clearInterval(this.#timer);
     this.#timer = null;
     this.#mic?.stop();
@@ -443,15 +456,35 @@ export class Robot {
   async shutdown(): Promise<void> {
     this.log('shutting down');
     this.face.setScreen({ title: 'Shutting down…', lines: ['Wait for the screen to go dark before unplugging.'] });
-    await this.brain.flush();
-    await this.#system(['systemctl', 'poweroff']);
+    await this.#powerDown('poweroff');
   }
 
   async reboot(): Promise<void> {
     this.log('rebooting');
     this.face.setScreen({ title: 'Restarting…', lines: [] });
-    await this.brain.flush();
-    await this.#system(['systemctl', 'reboot']);
+    await this.#powerDown('reboot');
+  }
+
+  /**
+   * Saves what is left to save (waiting no more than POWER_SAVE_WAIT_MS), then asks the system to power off or
+   * restart. If that fails, or Peeqo is still running POWER_FORCE_AFTER_MS later (something held the shutdown up),
+   * it forces it (every process stopped, the disks unmounted); if even that fails, the face says it is safe to unplug.
+   */
+  async #powerDown(how: 'poweroff' | 'reboot'): Promise<void> {
+    await Promise.race([this.brain.flush(), new Promise((resolve) => setTimeout(resolve, POWER_SAVE_WAIT_MS))]);
+    const force = async () => {
+      this.log(`${how} is taking too long: forcing it`);
+      const problem = await this.#system(['systemctl', how, '--force']);
+      if (problem) {
+        this.face.setScreen({
+          title: how === 'poweroff' ? "I couldn't shut down" : "I couldn't restart",
+          lines: [problem, how === 'poweroff' ? 'It is safe to unplug me now.' : 'Unplug me and plug me back in.'],
+          tone: 'warn',
+        });
+      }
+    };
+    if (await this.#system(['systemctl', how])) await force();
+    else setTimeout(() => void force(), POWER_FORCE_AFTER_MS).unref?.();
   }
 
   get transcript(): readonly TranscriptLine[] {
@@ -493,6 +526,7 @@ export class Robot {
       memory: [...this.memory.facts],
       timers: this.alarms.list().map((a) => ({ id: a.id, kind: a.kind, label: a.label, inMs: a.dueMs - Date.now() })),
       screens: this.face.screens,
+      health: this.#health?.health ?? null,
     };
   }
 
@@ -577,16 +611,19 @@ export class Robot {
     for (const listener of this.#transcriptListeners) listener(line);
   }
 
-  async #system(command: readonly string[]): Promise<void> {
+  /** Runs a command as root; resolves with why it failed (logged), or null. */
+  async #system(command: readonly string[]): Promise<string | null> {
     if (this.options.system) return this.options.system(command);
     if (this.options.fake) {
       this.log(`(fake) would run: sudo ${command.join(' ')}`);
-      return;
+      return null;
     }
-    await new Promise<void>((resolve) => {
-      execFile('sudo', ['-n', ...command], (error) => {
-        if (error) this.log(`${command.join(' ')} failed: ${error.message}`);
-        resolve();
+    return new Promise((resolve) => {
+      execFile('sudo', ['-n', ...command], { timeout: 20000 }, (error, _stdout, stderr) => {
+        if (!error) return resolve(null);
+        const why = (String(stderr).trim().split('\n').at(-1) || error.message).trim();
+        this.log(`${command.join(' ')} failed: ${why}`);
+        resolve(why);
       });
     });
   }

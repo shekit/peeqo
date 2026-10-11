@@ -20,15 +20,14 @@ StandardError=journal
 UtmpIdentifier=tty1
 UtmpMode=user
 Environment=WLR_LIBINPUT_NO_DEVICES=1
-# No mouse pointer on the face (an invisible cursor theme, installed by install.sh).
-Environment=XCURSOR_THEME=peeqo-blank
-Environment=XCURSOR_SIZE=24
 # Wait for the service to answer before opening the page.
 ExecStartPre=/bin/sh -c 'for i in $(seq 1 60); do curl -sf -o /dev/null http://localhost/face && exit 0; sleep 1; done; exit 0'
 # Low-memory settings for the Pi 3 B+ (1 GB), and the face drawn at 30 frames a second. The dev kit's screen is 480×800,
 # mounted on its side: the face is turned 90° clockwise to match (rotate=0, 90, 180 or 270).
 ExecStart=/usr/bin/cage -s -- @CHROMIUM@ --kiosk --noerrdialogs --disable-infobars --disable-session-crashed-bubble --no-first-run --password-store=basic --autoplay-policy=no-user-gesture-required --check-for-update-interval=31536000 --ozone-platform=wayland --enable-low-end-device-mode --renderer-process-limit=2 --disk-cache-size=16000000 --disable-features=Translate,MediaRouter,OptimizationHints http://localhost/face?fps=30&rotate=90
 Restart=always
+# Stopping takes about a second: never hold a shutdown up for longer than this.
+TimeoutStopSec=10
 RestartSec=3
 
 [Install]

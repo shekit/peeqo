@@ -35,7 +35,13 @@ export interface SetupDeps {
   readonly random?: () => number;
   /** Waits (replaced in tests). */
   readonly sleep?: (ms: number) => Promise<void>;
+  /** The time, ms (replaced in tests). */
+  readonly now?: () => number;
 }
+
+/** The Wi-Fi watchdog: how often it checks, and how long the router may stay silent before the Wi-Fi is restarted. */
+export const WIFI_CHECK_MS = 30_000;
+export const WIFI_LOST_MS = 120_000;
 
 /** The robot's address on its own setup network (NetworkManager's shared-connection default). */
 export const SETUP_ADDRESS = '10.42.0.1';
@@ -185,6 +191,41 @@ export class SetupController {
       this.#clearAddress();
       this.#addressTimer = setTimeout(() => this.#deps.showScreen(null), ms);
     });
+  }
+
+  /**
+   * Keeps Peeqo on its Wi-Fi: while not setting up, it checks every WIFI_CHECK_MS that the router answers; once it
+   * has not for WIFI_LOST_MS (the Pi's Wi-Fi can stop passing anything while it still looks connected), it turns the
+   * Wi-Fi off and on again, and tries again every WIFI_LOST_MS while it stays silent. Returns a function that stops.
+   */
+  watch(): () => void {
+    const now = this.#deps.now ?? Date.now;
+    let silentSince: number | null = null;
+    let checking = false;
+    const check = async () => {
+      if (checking || this.#phase !== 'off') return;
+      checking = true;
+      try {
+        const answers = await this.#deps.network.reachable().catch(() => false);
+        const t = now();
+        if (answers) {
+          if (silentSince !== null) this.#deps.log('Wi-Fi: the router answers again');
+          silentSince = null;
+        } else if (silentSince === null) {
+          silentSince = t;
+          this.#deps.log('Wi-Fi: the router does not answer');
+        } else if (t - silentSince >= WIFI_LOST_MS) {
+          silentSince = t;
+          this.#deps.log('Wi-Fi: still no answer from the router, so turning the Wi-Fi off and on again');
+          await this.#deps.network.restartWifi().catch((error: unknown) => this.#deps.log(`Wi-Fi could not be restarted: ${error instanceof Error ? error.message : String(error)}`));
+        }
+      } finally {
+        checking = false;
+      }
+    };
+    const timer = setInterval(() => void check(), WIFI_CHECK_MS);
+    timer.unref?.();
+    return () => clearInterval(timer);
   }
 
   /** Shows the address again (a medium press of a button). */

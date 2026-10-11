@@ -1,3 +1,3 @@
 # Peeqo's service may join Wi-Fi networks (the setup page) and shut the robot down or restart it (a button, the
 # panel), and nothing else as root. Installed by install.sh as /etc/sudoers.d/peeqo.
-@USER@ ALL=(root) NOPASSWD: /usr/bin/nmcli, /usr/bin/systemctl poweroff, /usr/bin/systemctl reboot
+@USER@ ALL=(root) NOPASSWD: /usr/bin/nmcli, /usr/bin/systemctl poweroff, /usr/bin/systemctl reboot, /usr/bin/systemctl poweroff --force, /usr/bin/systemctl reboot --force

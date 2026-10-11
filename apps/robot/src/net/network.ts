@@ -24,6 +24,10 @@ export interface Network {
   stopHotspot(): Promise<void>;
   /** Joins a network (and remembers it, so it is joined again after a restart). */
   connect(ssid: string, password: string | null): Promise<{ readonly ok: boolean; readonly message: string }>;
+  /** Whether its router answers (Wi-Fi can look connected and still have stopped passing anything). */
+  reachable(): Promise<boolean>;
+  /** Turns the Wi-Fi off and on again. */
+  restartWifi(): Promise<void>;
 }
 
 export const HOTSPOT_CONNECTION = 'peeqo-setup';
@@ -60,13 +64,22 @@ export function parseWifiList(output: string): WifiNetwork[] {
 
 type Run = (args: readonly string[], timeoutMs?: number) => Promise<string>;
 
+/** Runs a program (not as root), resolving with what it printed; rejects if it fails. */
+export type Exec = (file: string, args: readonly string[]) => Promise<string>;
+const exec: Exec = (file, args) =>
+  new Promise((resolve, reject) => {
+    execFile(file, args, { timeout: 10000 }, (error, stdout) => (error ? reject(error) : resolve(stdout)));
+  });
+
 /** NetworkManager through nmcli, run with sudo (the installer allows exactly that). */
 export class NmcliNetwork implements Network {
   readonly #run: Run;
+  readonly #exec: Exec;
   readonly #device: string;
 
-  constructor(options: { device?: string; run?: Run } = {}) {
+  constructor(options: { device?: string; run?: Run; exec?: Exec } = {}) {
     this.#device = options.device ?? 'wlan0';
+    this.#exec = options.exec ?? exec;
     this.#run =
       options.run ??
       ((args, timeoutMs = 20000) =>
@@ -99,6 +112,24 @@ export class NmcliNetwork implements Network {
       }
     }
     return { connected: connected && !hotspot, ssid, ip, hotspot };
+  }
+
+  async reachable(): Promise<boolean> {
+    try {
+      const routes = await this.#exec('ip', ['-4', 'route', 'show', 'default', 'dev', this.#device]);
+      const gateway = /via ([\d.]+)/.exec(routes)?.[1];
+      if (!gateway) return false;
+      await this.#exec('ping', ['-c', '1', '-W', '3', gateway]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async restartWifi(): Promise<void> {
+    await this.#run(['radio', 'wifi', 'off']);
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await this.#run(['radio', 'wifi', 'on']);
   }
 
   async scan(): Promise<WifiNetwork[]> {
@@ -147,6 +178,18 @@ export class FakeNetwork implements Network {
 
   async scan(): Promise<WifiNetwork[]> {
     return [...this.networks];
+  }
+
+  /** (Pretend: the router answers whenever connected, unless told otherwise.) */
+  routerAnswers = true;
+  wifiRestarts = 0;
+
+  async reachable(): Promise<boolean> {
+    return this.#state.connected && this.routerAnswers;
+  }
+
+  async restartWifi(): Promise<void> {
+    this.wifiRestarts++;
   }
 
   async startHotspot(): Promise<void> {

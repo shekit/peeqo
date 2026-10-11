@@ -125,7 +125,15 @@ to fill the room your marks leave (they were written for the 3D model's smaller 
   48 kHz, shared, so sounds play while the microphone listens), and sets its levels once
   (`system/sound-levels.sh`; change them with `alsamixer -c wm8960soundcard`). Pick other devices with `--mic` and
   `--speaker` in `/etc/systemd/system/peeqo.service` (see `arecord -L` and `aplay -L`).
-- **Face screen:** the kiosk shows no mouse pointer (an invisible cursor theme, `peeqo-blank`).
+- **Face screen:** no mouse pointer. The HDMI port's CEC remote passes for one, so a udev rule has libinput ignore it
+  (`system/hdmi-cec.rules`).
+- **Wi-Fi:** power saving off (it makes the Pi drop off the network), and a watchdog: if the router stops answering
+  for 2 minutes, Peeqo turns its Wi-Fi off and on again.
+- **Log:** kept across restarts (`journalctl -u peeqo -b -1` shows the last boot's), capped at 64 MB.
+- **Heat and power:** the panel shows the Pi's temperature, and the log says when it slows down to keep cool or the
+  supply dips too low (`vcgencmd get_throttled`).
+- **Shutting down:** if the system has not stopped Peeqo 30 s after being asked, it forces it; if even that fails,
+  the face says it is safe to unplug.
 - **Hardware access:** the hardware helper (`python/hardware.py`) drives the servo board (PCA9685, I²C bus 1, 0x40),
   the LED ring (12 APA102 LEDs on SPI 0.0, 4 MHz) and the buttons (GPIO 4, 16, 17 and 23, high when pressed), all as
   wired in 2019.

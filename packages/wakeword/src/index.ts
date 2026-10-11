@@ -40,11 +40,15 @@ export function wakeWordReady(python = DEFAULT_PYTHON): boolean {
  * openWakeWord in a helper process: write audio with write(), hear about wake words and speech through the callback.
  * start() resolves once the models are loaded.
  */
+/** Audio waiting for the detector, beyond which more is dropped: half a second (on top of the pipe's own buffer). */
+export const MAX_QUEUED_BYTES = 16000;
+
 export class WakeWordDetector {
   readonly #options: WakeWordOptions;
   readonly #onEvent: (event: WakeWordEvent) => void;
   #child: ChildProcessWithoutNullStreams | null = null;
   #stderr = '';
+  #dropped = 0;
 
   constructor(options: WakeWordOptions, onEvent: (event: WakeWordEvent) => void) {
     this.#options = options;
@@ -101,9 +105,24 @@ export class WakeWordDetector {
     });
   }
 
-  /** Feeds audio: 16 kHz, mono, 16-bit samples (little-endian bytes are accepted as they are). */
+  /**
+   * Feeds audio: 16 kHz, mono, 16-bit samples (little-endian bytes are accepted as they are). If the detector has
+   * fallen behind (more than MAX_QUEUED_BYTES waiting for it), the audio is dropped: a skipped moment is better than
+   * hearing everything later and later, and the queue never grows.
+   */
   write(samples: Int16Array | Uint8Array): void {
-    this.#child?.stdin.write(Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength));
+    const stdin = this.#child?.stdin;
+    if (!stdin) return;
+    if (stdin.writableLength > MAX_QUEUED_BYTES) {
+      this.#dropped++;
+      return;
+    }
+    stdin.write(Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength));
+  }
+
+  /** Chunks dropped because the detector was behind. */
+  get dropped(): number {
+    return this.#dropped;
   }
 
   stop(): void {

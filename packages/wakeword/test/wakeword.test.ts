@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -33,10 +33,12 @@ async function detect(samples: Int16Array): Promise<WakeWordEvent[]> {
   const events: WakeWordEvent[] = [];
   const detector = new WakeWordDetector({}, (e) => events.push(e));
   await detector.start();
-  // Plus half a second of silence so the last chunk is processed.
-  detector.write(samples);
-  detector.write(new Int16Array(8000));
-  const expected = Math.floor((samples.length + 8000) / 1280);
+  // Plus half a second of silence so the last chunk is processed (in one write: a second while the first is still
+  // queued would be dropped, as audio is when the detector falls behind).
+  const all = new Int16Array(samples.length + 8000);
+  all.set(samples, 0);
+  detector.write(all);
+  const expected = Math.floor(all.length / 1280);
   await new Promise<void>((resolve, reject) => {
     const started = Date.now();
     const timer = setInterval(() => {
@@ -74,5 +76,17 @@ describe('WakeWordDetector', () => {
   it('says how to set it up when its environment is missing', async () => {
     const detector = new WakeWordDetector({ python: '/nonexistent/python' }, () => undefined);
     await expect(detector.start()).rejects.toThrow(/npm run setup -w @peeqo\/wakeword/);
+  });
+
+  it.skipIf(!existsSync('/usr/bin/python3'))('drops audio rather than queue it up when the detector falls behind', async () => {
+    // A detector that never reads.
+    const slow = path.join(mkdtempSync(path.join(tmpdir(), 'peeqo-slow-')), 'slow.py');
+    writeFileSync(slow, 'import json, time\nprint(json.dumps({"type": "ready", "words": ["x"]}), flush=True)\ntime.sleep(30)\n');
+    const detector = new WakeWordDetector({ python: '/usr/bin/python3', script: slow }, () => undefined);
+    await detector.start();
+    for (let i = 0; i < 200; i++) detector.write(new Int16Array(1280)); // 16 s of audio, all at once
+    expect(detector.dropped).toBeGreaterThan(150);
+    detector.stop();
+    rmSync(path.dirname(slow), { recursive: true, force: true });
   });
 });

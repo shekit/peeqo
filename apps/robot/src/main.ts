@@ -72,6 +72,7 @@ await robot.start();
 await server.listen();
 robot.log(`panel: http://${fake ? 'localhost' : `${os.hostname().split('.')[0]}.local`}${port === 80 ? '' : `:${port}`}/  face: /face  data: ${dataDir}`);
 void setup.boot(fake ? 0 : 45000);
+if (!fake) setup.watch();
 
 let stopping = false;
 const stop = async (signal: string) => {

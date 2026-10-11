@@ -19,7 +19,7 @@ if [ "$(id -u)" -eq 0 ]; then
 fi
 
 step "System packages"
-want=(python3-venv python3-smbus2 python3-spidev python3-gpiozero python3-lgpio alsa-utils cage dnsmasq-base network-manager avahi-daemon curl)
+want=(python3-venv python3-smbus2 python3-spidev python3-gpiozero python3-lgpio alsa-utils iw cage dnsmasq-base network-manager avahi-daemon curl)
 missing=()
 for package in "${want[@]}"; do dpkg -s "$package" >/dev/null 2>&1 || missing+=("$package"); done
 if [ ${#missing[@]} -gt 0 ]; then
@@ -75,16 +75,19 @@ else
   echo "(the sound chip shows up after the robot restarts)"
 fi
 
-step "Face screen"
-# The kiosk compositor draws a mouse pointer on the screen: an invisible cursor theme hides it.
-CURSORS=/usr/share/icons/peeqo-blank/cursors
-if [ ! -f "$CURSORS/default" ]; then
-  sudo install -d "$CURSORS"
-  # One transparent 1×1 image in the Xcursor format.
-  python3 -c 'import struct, sys; sys.stdout.buffer.write(b"Xcur" + struct.pack("<3I", 16, 0x10000, 1) + struct.pack("<3I", 0xFFFD0002, 24, 28) + struct.pack("<9I", 36, 0xFFFD0002, 24, 1, 1, 1, 0, 0, 0) + struct.pack("<I", 0))' | sudo tee "$CURSORS/default" >/dev/null
-  for name in left_ptr arrow top_left_arrow pointer hand1 hand2 text xterm wait watch progress crosshair grab grabbing move; do sudo ln -sf default "$CURSORS/$name"; done
-  printf '[Icon Theme]\nName=peeqo-blank\nComment=An invisible cursor, for Peeqo'"'"'s face screen\n' | sudo tee /usr/share/icons/peeqo-blank/index.theme >/dev/null
-fi
+step "Face screen, Wi-Fi and the log"
+# No mouse pointer on the face: the HDMI port's CEC remote passes for one (see the rule).
+sudo install -m 0644 "$DIR/apps/robot/system/hdmi-cec.rules" /etc/udev/rules.d/90-peeqo-hdmi-cec.rules
+sudo udevadm control --reload 2>/dev/null || true
+sudo udevadm trigger --subsystem-match=input --action=change 2>/dev/null || true
+# Wi-Fi power saving off (the Pi drops off the network with it), now and from now on.
+sudo install -d /etc/NetworkManager/conf.d
+sudo install -m 0644 "$DIR/apps/robot/system/wifi-powersave.conf" /etc/NetworkManager/conf.d/90-peeqo-wifi.conf
+if [ -x /usr/sbin/iw ] && ip link show wlan0 >/dev/null 2>&1; then sudo /usr/sbin/iw dev wlan0 set power_save off 2>/dev/null || true; fi
+# Keep the log across restarts.
+sudo install -d /etc/systemd/journald.conf.d
+sudo install -m 0644 "$DIR/apps/robot/system/journald.conf" /etc/systemd/journald.conf.d/90-peeqo.conf
+sudo systemctl restart systemd-journald 2>/dev/null || true
 
 groups_wanted=()
 for group in audio i2c spi gpio video input render; do getent group "$group" >/dev/null && groups_wanted+=("$group"); done

@@ -1,0 +1,4 @@
+# Installed by Peeqo's install.sh as /etc/udev/rules.d/90-peeqo-hdmi-cec.rules. The HDMI port's CEC remote shows up
+# as a pointing stick, which makes the face screen draw a mouse pointer in its middle. Nothing on Peeqo uses it, so
+# libinput leaves it alone (and with no pointer, the kiosk shows none).
+ACTION=="add|change", KERNEL=="event*", ATTRS{name}=="vc4-hdmi", ENV{LIBINPUT_IGNORE_DEVICE}="1"

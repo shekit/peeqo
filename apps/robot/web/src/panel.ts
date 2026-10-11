@@ -15,6 +15,7 @@ interface PanelState {
     listening: { wakeWord: boolean; microphone: boolean; recording: boolean };
     memory: string[];
     timers: { id: string; kind: string; label: string; inMs: number }[];
+    health: { tempC: number | null; underVoltage: boolean; underVoltageSeen: boolean; slowedForHeat: boolean; throttled: boolean } | null;
   };
   settings: { name: string; model: string | null; voice: boolean; keys: { openrouter: boolean; klipy: boolean } };
   calibration: CalibrationView;
@@ -199,6 +200,8 @@ function dashboard(info: Info): void {
       chip(r.hardware ? (r.hardware.fake ? 'no hardware (laptop)' : `servos ${r.hardware.servos ? '✓' : '✗'} · LEDs ${r.hardware.leds ? '✓' : '✗'}`) : 'hardware helper not running', r.hardware && !r.hardware.fake && r.hardware.servos && r.hardware.leds ? 'ok' : 'warn'),
       chip(r.servos.calibrated ? `servos ${r.servos.mode}` : 'not calibrated', r.servos.calibrated ? 'ok' : 'warn'),
       chip(r.listening.microphone ? (r.listening.wakeWord ? 'listening for its wake word' : 'microphone on') : 'no microphone'),
+      ...(r.health?.tempC != null ? [chip(`${r.health.tempC.toFixed(0)} °C${r.health.throttled ? ' · throttled' : r.health.slowedForHeat ? ' · slowed to cool' : ''}`, r.health.throttled ? 'warn' : undefined)] : []),
+      ...(r.health?.underVoltage || r.health?.underVoltageSeen ? [chip(r.health.underVoltage ? 'power supply too weak' : 'power dipped since start-up', 'warn')] : []),
       ...(r.servos.fault ? [chip(r.servos.fault, 'warn')] : []),
       ...(r.motion.status !== 'ok' ? [chip(`motion ${r.motion.status}`, 'warn')] : []),
     );
