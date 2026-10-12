@@ -32,7 +32,15 @@ export interface HardwareOutputs {
   leds(frame: Uint8Array): void;
 }
 
+/** The servo board's step for a pulse (null: off), worked out as python/hardware.py does. */
+export function pulseSteps(us: number): number | null {
+  if (us <= 0) return null;
+  return Math.max(0, Math.min(4095, Math.round(Math.min(2500, Math.max(500, us)) / (1_000_000 / 50 / 4096)) - 1));
+}
+
 export class HardwareLink implements HardwareOutputs {
+  /** The steps last sent to the servo board (see servos). */
+  #lastSteps: string | null = null;
   readonly #options: HardwareLinkOptions;
   #child: ChildProcessWithoutNullStreams | null = null;
   #stderr = '';
@@ -53,6 +61,7 @@ export class HardwareLink implements HardwareOutputs {
     if (o.fake) args.push('--fake');
     if (o.activeLow) args.push('--active-low');
     const child = spawn(o.python ?? 'python3', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    this.#lastSteps = null; // (a new helper has been told nothing yet)
     this.#child = child;
     child.stderr.on('data', (chunk: Buffer) => {
       this.#stderr = (this.#stderr + chunk.toString()).slice(-2000);
@@ -90,10 +99,17 @@ export class HardwareLink implements HardwareOutputs {
     });
   }
 
-  /** Pulse widths for channels 0, 1, 2, … in microseconds (0 = off). */
+  /**
+   * Pulse widths for channels 0, 1, 2, … in microseconds (0 = off). Sent only when the board would see a change (its
+   * steps are 4.9 µs), so a head moving slowly, or holding still, costs the helper next to nothing.
+   */
   servos(pulsesUs: readonly number[]): void {
     if (pulsesUs.some((us) => !Number.isFinite(us))) return;
-    this.#send(`S ${pulsesUs.map((us) => (Math.round(us * 10) / 10).toString()).join(' ')}`);
+    const rounded = pulsesUs.map((us) => Math.round(us * 10) / 10);
+    const steps = rounded.map(pulseSteps).join(',');
+    if (steps === this.#lastSteps) return;
+    this.#lastSteps = steps;
+    this.#send(`S ${rounded.join(' ')}`);
   }
 
   leds(frame: Uint8Array): void {

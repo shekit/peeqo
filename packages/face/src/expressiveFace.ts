@@ -181,6 +181,8 @@ export class ExpressiveFace {
   #media: { readonly media: ScreenMedia; readonly startMs: number; readonly endMs: number } | null = null;
   /** Words on the screen: over a GIF (along its bottom, meme style) or over the face (above the eyes). */
   #caption: { readonly text: string; readonly overMedia: boolean; readonly startMs: number; readonly endMs: number } | null = null;
+  /** What the last drawIfChanged() drew (see #frameKey). */
+  #drawnKey: string | null = null;
 
   constructor(options: ExpressiveFaceOptions = {}) {
     this.#random = seededRandom(options.seed ?? 1);
@@ -327,6 +329,41 @@ export class ExpressiveFace {
     this.#shapes.update(dt, this.#shapeVector());
 
     return true;
+  }
+
+  /**
+   * Draws, unless the picture would be the same as the last one drawn: between blinks and glances the eyes often
+   * hold still for a moment, and an unchanged canvas costs the screen nothing. Returns whether it drew.
+   */
+  drawIfChanged(ctx: CanvasRenderingContext2D): boolean {
+    const key = this.#frameKey();
+    if (key !== null && key === this.#drawnKey) return false;
+    this.draw(ctx);
+    this.#drawnKey = key;
+    return true;
+  }
+
+  /**
+   * A fingerprint of the picture draw() makes now, to a tenth of a pixel; null while media shows (a GIF or video can
+   * move without anything here changing) or the eyes beat as hearts (they move with the clock).
+   */
+  #frameKey(): string | null {
+    const now = this.#lastMs ?? 0;
+    if (this.#mediaAlpha(now) > 0) return null;
+    const shapes = this.#shapes.value;
+    for (const e of [0, 1] as const) if (shapeAt(shapes, e).heart > 0.001) return null;
+    const g = this.#gaze.value;
+    const caption = this.#caption;
+    const captionAlpha = this.#captionAlpha(now);
+    const round = (v: number, step: number) => Math.round(v / step);
+    return [
+      round(this.#blinkOpen(now), 0.002),
+      round(g[0]! * GAZE_PX.x, 0.1),
+      round(g[1]! * GAZE_PX.y, 0.1),
+      ...shapes.map((v) => round(v, 0.001)),
+      this.#glasses ? 1 : 0,
+      captionAlpha > 0 && caption ? `${round(captionAlpha, 0.01)}|${caption.overMedia ? 1 : 0}|${caption.text}` : '',
+    ].join(',');
   }
 
   draw(ctx: CanvasRenderingContext2D): void {

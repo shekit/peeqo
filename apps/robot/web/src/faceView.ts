@@ -21,10 +21,17 @@ const MEDIA_LOAD_MS = 6000;
  * loads and reports back on, captions, and screens of information over the face (setup QR codes, its address).
  * The robot's screen shows it full size; the panel shows a small copy.
  */
-export function startFace(canvas: HTMLCanvasElement, overlay: HTMLElement, options: { onConnection?: (connected: boolean) => void; fps?: number } = {}): void {
-  canvas.width = FACE_WIDTH;
-  canvas.height = FACE_HEIGHT;
-  const context = canvas.getContext('2d')!;
+export function startFace(canvas: HTMLCanvasElement, overlay: HTMLElement, options: { onConnection?: (connected: boolean) => void; fps?: number; rotate?: 0 | 90 | 180 | 270 } = {}): void {
+  const rotate = options.rotate ?? 0;
+  const sideways = rotate === 90 || rotate === 270;
+  canvas.width = sideways ? FACE_HEIGHT : FACE_WIDTH;
+  canvas.height = sideways ? FACE_WIDTH : FACE_HEIGHT;
+  // Opaque (it is always painted edge to edge), which is cheaper for the screen to show.
+  const context = canvas.getContext('2d', { alpha: false })!;
+  // Turned for a screen mounted turned (degrees clockwise): the face draws in its own 800×480 coordinates.
+  if (rotate === 90) context.setTransform(0, 1, -1, 0, FACE_HEIGHT, 0);
+  else if (rotate === 180) context.setTransform(-1, 0, 0, -1, FACE_WIDTH, FACE_HEIGHT);
+  else if (rotate === 270) context.setTransform(0, -1, 1, 0, 0, FACE_WIDTH);
   const face = new ExpressiveFace({ seed: (Math.random() * 2 ** 32) >>> 0 });
   const glasses = new Image();
   glasses.src = glassesUrl;
@@ -186,7 +193,7 @@ export function startFace(canvas: HTMLCanvasElement, overlay: HTMLElement, optio
   const frame = (now: number) => {
     if (now - lastDraw >= interval - 4) {
       lastDraw = now;
-      if (face.update(now)) face.draw(context);
+      if (face.update(now)) face.drawIfChanged(context);
     }
     requestAnimationFrame(frame);
   };

@@ -233,4 +233,28 @@ describe('ExpressiveFace', () => {
   it('rejects unknown emotions', () => {
     expect(() => new ExpressiveFace().setEmotion('smug' as Emotion)).toThrow(/Unknown emotion/);
   });
+
+  it('skips drawing a picture identical to the last one, and draws every one that moves', () => {
+    const face = new ExpressiveFace({ seed: 4 });
+    const ctx = recordingContext();
+    face.setBlinking(false);
+    let now = run(face, 0, 3); // settled, between glances
+    expect(face.drawIfChanged(ctx)).toBe(true);
+    face.update(now); // no time has passed: the same picture
+    expect(face.drawIfChanged(ctx)).toBe(false);
+    // Over a few seconds of glances and small eye movements, it draws whenever something moved, and only then.
+    let drawn = 0;
+    let skipped = 0;
+    now = run(face, now, 4, () => (face.drawIfChanged(ctx) ? drawn++ : skipped++));
+    expect(drawn).toBeGreaterThan(20);
+    expect(skipped).toBeGreaterThan(20);
+    // A blink is always drawn; a caption too.
+    face.setBlinking(true);
+    face.blink(now);
+    face.update(now + 40);
+    expect(face.drawIfChanged(ctx)).toBe(true);
+    face.showCaption('Hello!', now + 40, 2000);
+    face.update(now + 300);
+    expect(face.drawIfChanged(ctx)).toBe(true);
+  });
 });

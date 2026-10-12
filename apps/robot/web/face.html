@@ -23,16 +23,28 @@
         width: min(100vw, calc(100vh * 800 / 480));
         aspect-ratio: 800 / 480;
       }
-      /* A screen mounted turned (?rotate=90, 180 or 270: degrees clockwise): the face turned to match. */
+      /*
+       * A screen mounted turned (?rotate=90, 180 or 270: degrees clockwise): the face is drawn turned to match, filling
+       * the screen as it is (cheaper for the screen than turning the page), and screens over it are turned with CSS.
+       */
       .stage[data-turn] {
         position: fixed;
+        inset: 0;
+        width: auto;
+        aspect-ratio: auto;
+      }
+      .stage[data-turn] #screen {
+        inset: auto;
         left: 50%;
         top: 50%;
+        width: 100vw;
+        height: 100vh;
         transform: translate(-50%, -50%) rotate(calc(var(--turn) * 1deg));
       }
-      .stage[data-turn='90'],
-      .stage[data-turn='270'] {
-        width: min(100vh, calc(100vw * 800 / 480));
+      .stage[data-turn='90'] #screen,
+      .stage[data-turn='270'] #screen {
+        width: 100vh;
+        height: 100vw;
       }
       canvas {
         display: block;
@@ -87,12 +99,13 @@
       const params = new URLSearchParams(location.search);
       const fps = Number(params.get('fps')) || undefined;
       const turn = params.get('rotate');
-      if (turn === '90' || turn === '180' || turn === '270') {
+      const rotate = turn === '90' || turn === '180' || turn === '270' ? Number(turn) : 0;
+      if (rotate) {
         const stage = document.querySelector('.stage');
         stage.dataset.turn = turn;
         stage.style.setProperty('--turn', turn);
       }
-      startFace(document.getElementById('face'), document.getElementById('screen'), { fps });
+      startFace(document.getElementById('face'), document.getElementById('screen'), { fps, rotate });
     </script>
   </body>
 </html>

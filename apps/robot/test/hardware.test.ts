@@ -15,7 +15,7 @@ import {
   trimmed,
   type Calibration,
 } from '../src/hardware/calibration.ts';
-import { HardwareLink } from '../src/hardware/link.ts';
+import { HardwareLink, pulseSteps } from '../src/hardware/link.ts';
 import { RAW_RATE_US_PER_S, ServoOutput } from '../src/hardware/servoOutput.ts';
 
 const SCRIPT = fileURLToPath(new URL('../python/hardware.py', import.meta.url));
@@ -223,5 +223,19 @@ describe('the hardware helper (fake mode, no hardware)', () => {
     await new Promise((r) => setTimeout(r, 300));
     expect(presses).toEqual(['16:true', '16:false']);
     link.stop();
+  });
+});
+
+describe('the servo board link', () => {
+  it('works out the board\'s steps as the helper does (so it only sends what changes)', () => {
+    // python/hardware.py: Math.round(clamp(us, 500, 2500) / 4.8828125) - 1, or off for 0.
+    expect(pulseSteps(1500)).toBe(306);
+    expect(pulseSteps(1499.9)).toBe(306);
+    expect(pulseSteps(1502.5)).toBe(307);
+    expect(pulseSteps(500)).toBe(101);
+    expect(pulseSteps(2500)).toBe(511);
+    expect(pulseSteps(3000)).toBe(511);
+    expect(pulseSteps(100)).toBe(101);
+    expect(pulseSteps(0)).toBeNull();
   });
 });

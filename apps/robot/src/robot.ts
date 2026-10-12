@@ -73,6 +73,11 @@ const governorFor = (limits: SafetyLimits) => new MotionGovernor(undefined, limi
 const POWER_SAVE_WAIT_MS = 3000;
 const POWER_FORCE_AFTER_MS = 30_000;
 
+/** The LED ring gets at most one frame this often (50 a second). */
+const LED_FRAME_MS = 20;
+/** Where each button is on the dev kit, by GPIO pin (for the log). */
+export const BUTTON_NAMES: Readonly<Record<number, string>> = { 17: 'front left', 4: 'front right', 23: 'rear right', 16: 'rear left' };
+
 const STEP_S = 0.01;
 const MAX_STEPS_PER_TICK = 10;
 const TRANSCRIPT_LINES = 100;
@@ -175,6 +180,7 @@ export class Robot {
   #last = 0;
   #accumulator = 0;
   #ledVersion = -1;
+  #ledSentMs = -Infinity;
   #lastAlarmCheck = 0;
   #stopping = false;
 
@@ -352,7 +358,7 @@ export class Robot {
       buttons: config.buttons.pins,
       activeLow: config.buttons.activeLow,
       onButton: (pin, pressed) => {
-        this.log(`button ${pin} ${pressed ? 'pressed' : 'released'}`);
+        this.log(`button ${BUTTON_NAMES[pin] ? `${BUTTON_NAMES[pin]} (GPIO ${pin})` : pin} ${pressed ? 'pressed' : 'released'}`);
         this.buttons.change(pin, pressed);
       },
       onError: (message) => this.log(`hardware: ${message}`),
@@ -598,8 +604,10 @@ export class Robot {
       this.alarms.update();
     }
     this.leds.update(now);
-    if (this.strip.version !== this.#ledVersion) {
+    // At most LED_FRAME_MS apart (smooth to the eye; the newest frame always goes out).
+    if (this.strip.version !== this.#ledVersion && now - this.#ledSentMs >= LED_FRAME_MS) {
       this.#ledVersion = this.strip.version;
+      this.#ledSentMs = now;
       this.#outputs.leds(apa102Frame(this.strip.shown));
     }
     this.face.update(now);

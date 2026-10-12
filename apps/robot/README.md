@@ -136,7 +136,8 @@ to fill the room your marks leave (they were written for the 3D model's smaller 
 - **Shutting down:** if the system has not stopped Peeqo 30 s after being asked, it forces it; if even that fails,
   the face says it is safe to unplug.
 - **Hardware access:** the hardware helper (`python/hardware.py`) drives the servo board (PCA9685, I²C bus 1, 0x40),
-  the LED ring (12 APA102 LEDs on SPI 0.0, 4 MHz) and the buttons (GPIO 4, 16, 17 and 23, high when pressed), all as
+  the LED ring (12 APA102 LEDs on SPI 0.0, 4 MHz) and the buttons (high when pressed: GPIO 17 front left, 4 front
+  right, 23 rear right, 16 rear left; any of them does everything in the table above), all as
   wired in 2019.
 
 ## Still to check on the real robot
@@ -146,6 +147,5 @@ These can't be checked without the hardware:
 - the screen's resolution and rotation;
 - the speaker and microphone levels, and the wake word, by ear;
 - where LED 0 sits on the ring;
-- which physical button is which GPIO (the panel's log shows each press);
 - the setup network and captive portal on real phones;
 - the calibration itself.

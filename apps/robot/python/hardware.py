@@ -30,6 +30,7 @@ import time
 MODE1, MODE2, PRESCALE = 0x00, 0x01, 0xFE
 MODE1_DEFAULT, MODE2_DEFAULT = 0x01, 0x04
 SLEEP, RESTART = 0x10, 0x80
+AUTO_INCREMENT = 0x20  # (added to MODE1: a channel's registers can be written in one transfer)
 CHANNEL0_ON_L = 0x06
 ALL_OFF_H = 0xFD
 FULL_ON_OR_OFF = 0x10
@@ -66,8 +67,8 @@ class Servos:
         self.address = address
         self.last = {}
         write = self.write
-        write(MODE1, MODE1_DEFAULT)
-        write(MODE2, MODE2_DEFAULT)
+        write(MODE1, MODE1_DEFAULT | AUTO_INCREMENT)
+        write(MODE2, MODE2_DEFAULT)  # (its OCH bit is 0: a new value takes effect at the end of its transfer)
         write(ALL_OFF_H, FULL_ON_OR_OFF)  # all channels off until told otherwise
         old = self.bus.read_byte_data(address, MODE1)
         write(MODE1, (old & ~RESTART) | SLEEP)
@@ -81,17 +82,20 @@ class Servos:
 
     def set(self, channel, us):
         steps = pulse_steps(us)
-        if self.last.get(channel) == steps:
+        last = self.last.get(channel)
+        if last == steps:
             return
         self.last[channel] = steps
         base = CHANNEL0_ON_L + 4 * channel
         if steps is None:
             self.write(base + 3, FULL_ON_OR_OFF)
             return
-        self.write(base, 0)
-        self.write(base + 1, 0)
-        self.write(base + 2, steps & 0xFF)
-        self.write(base + 3, (steps >> 8) & 0x0F)
+        # The pulse's end in one transfer, so it changes in one go (the board takes it at the transfer's end): written
+        # a byte at a time, a cycle could start with half the new value. Its start (step 0) only needs writing once.
+        if last is None:
+            self.bus.write_i2c_block_data(self.address, base, [0, 0, steps & 0xFF, steps >> 8])
+        else:
+            self.bus.write_i2c_block_data(self.address, base + 2, [steps & 0xFF, steps >> 8])
 
 
 class Leds:
